@@ -3,14 +3,7 @@
 
 from pyModbusTCP.client import ModbusClient
 import dzarwis_global_vars as dgv
-from dataclasses import dataclass
 
-@dataclass
-class DO_card:
-    # data klasa opisująca kartewyjsciowa
-    numer_karty: int
-    opis_funkcjonalnosci : str
-    ilosc_wyjsc : int
 
 def wago_read_outputs(mb):
     # wyjścia wgo są dostępne na holdingach w przestrzni adresowej 512-767
@@ -24,12 +17,19 @@ def wago_read_outputs(mb):
         start_reg +=lrc
         if start_reg + lrc> stop_reg:
             lrc = stop_reg-start_reg
-        
-    print(outputs)
+    #print(outputs)
+    ob = []
+    for o in outputs:
+        ob.extend(list(bin(o).replace("0b", ""))[::-1])
+    return(ob)
+
+def interprate_outputs(ob):
+    print(ob)
 
 def main():
     w_mb = ModbusClient(host = dgv.wago_ip, unit_id=dgv.wago_u_id, port=dgv.wago_mb_port,auto_open=True,auto_close=True)
-    wago_read_outputs(w_mb)
+    o = wago_read_outputs(w_mb)
+    interprate_outputs(o)
 
 if __name__ == "__main__":
     main()

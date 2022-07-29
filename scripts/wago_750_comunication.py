@@ -65,9 +65,23 @@ def main():
     w_mb = ModbusClient(host = dgv.PLC.ip, unit_id=dgv.PLC.uid, port=dgv.PLC.port,auto_open=True,auto_close=True)
     o = wago_read_outputs(w_mb)
     o_names = interprate_outputs(o)
-    out = [{'sw_num':19,'state':1}]
+    out = [
+        {'sw_num':18,'state':0}, 
+        {'sw_num':19,'state':0},
+        {'sw_num':20,'state':0}, 
+        {'sw_num':21,'state':0}, 
+
+    ]
     print(o_names)
+    
     wago_set_outputs(w_mb,out)
+    o = wago_read_outputs(w_mb)
+    a=0
+    for i in o:
+        if i == 1 :
+            print (a)
+        a+=1
+
     
 
 

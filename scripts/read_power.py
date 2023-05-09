@@ -9,7 +9,7 @@ from influxdb import InfluxDBClient
 # przerwa w odczytywaniu 
 s=10
 #ip bramki
-ip = '192.168.8.16'
+ip = '192.168.8.40'
 # licznik
 E_uid = 3
 #growat 
@@ -39,6 +39,7 @@ db = InfluxDBClient('127.0.0.1', 8086, 'pi', 'pi', 'Energia')
 while True:
     # zapytaj growat 
     G_regs = G.read_input_registers(G_start_reg, G_cout_reg)
+    print(G_regs)
     # zapytaj growat błędy
     G_errors = G.read_input_registers(3105,2)
 

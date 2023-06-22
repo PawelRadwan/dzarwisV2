@@ -40,7 +40,7 @@ def interprate_outputs(ob):
     return on_optputs_names
 
 
-def wago_set_outputs(mb,outs_sw_nums:list[dict['sw_num':int,'state':int]]):
+def wago_set_outputs(mb,outs_sw_nums):
     #print('set')
     current_status = wago_read_outputs(mb)
     #print(current_status)
@@ -109,7 +109,6 @@ def main():
             else:
                 set_light(w_mb, 'swiatlo nad schodami', 1)
 
-
         sleep(0.1)
 
 
@@ -119,4 +118,3 @@ if __name__ == "__main__":
     main()
    except KeyboardInterrupt:
         print('Interrupted')
-        sys.exit(0)

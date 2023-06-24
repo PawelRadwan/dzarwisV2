@@ -50,8 +50,8 @@ class PLC:
         DO(0,0,13,'swiatlo salon kinkiety'),
         DO(0,0,14,'swiatlo wiatrolap'),
         DO(0,0,15,'swiatlo Natka 2'),
-        DO(0,0,16,'lampa 17'),
-        DO(0,0,17,'przejscie'),
+        DO(0,0,16,'swiatlo lazienka gora'),
+        DO(0,0,17,'swiatlo przejscie'),
         DO(0,0,18,'bojler mieszadlo'),
         DO(0,0,19,'bojler grzanie')
 

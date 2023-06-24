@@ -84,30 +84,109 @@ def main():
     while True:
         inputs = w_mb.read_holding_registers(0,40)
         outs = wago_read_outputs(w_mb)
-        lights =  interprate_outputs(outs)
+        lights = interprate_outputs(outs)
         print (lights)
-        b_inputs=(list(format(inputs[0],'016b')))
-        print(b_inputs)
-        if b_inputs[-1] == '1':
+        b_inputs_1=(list(format(inputs[0],'016b')))
+        b_inputs_2 = (list(format(inputs[1], '016b')))
+
+        print ('!! 1')
+        print(b_inputs_1)
+        print("['6', '5', '4', '3', '2', '1', '0', '9', '8', '7', '6', '5', '4', '3', '2', '1']")
+        print ('!! 22')
+        print(b_inputs_2)
+        print("['6', '5', '4', '3', '2', '1', '0', '9', '8', '7', '6', '5', '4', '3', '2', '1']")
+
+        if b_inputs_1[-1] == '1':
             if 'swiatlo lazienka' in lights:
                 set_light(w_mb, 'swiatlo lazienka', 0)
             else:
                 set_light(w_mb, 'swiatlo lazienka', 1)
-        if b_inputs[-2] == '1':
+        if b_inputs_1[-2] == '1':
             if 'swiatlo biuro' in lights:
                 set_light(w_mb, 'swiatlo biuro', 0)
             else:
                 set_light(w_mb, 'swiatlo biuro', 1)
-        if b_inputs[-3] == '1':
+        if b_inputs_1[-3] == '1':
             if 'swiatlo kuchnia' in lights:
                 set_light(w_mb, 'swiatlo kuchnia', 0)
             else:
                 set_light(w_mb, 'swiatlo kuchnia', 1)
-        if b_inputs[-7] == '1' or b_inputs[-16] == '1':
+        if b_inputs_1[-4] == '1':
+            if 'swiatlo salon kinkiety' in lights:
+                set_light(w_mb, 'swiatlo salon kinkiety', 0)
+            else:
+                set_light(w_mb, 'swiatlo salon kinkiety', 1)
+        if b_inputs_1[-5] == '1':
+            if 'swiatlo wiatrolap' in lights:
+                set_light(w_mb, 'swiatlo wiatrolap', 0)
+            else:
+                set_light(w_mb, 'swiatlo wiatrolap', 1)
+        if b_inputs_1[-6] == '1':
+            if 'swiatlo jadalnia' in lights:
+                set_light(w_mb, 'swiatlo jadalnia', 0)
+            else:
+                set_light(w_mb, 'swiatlo jadalnia', 1)
+        if b_inputs_1[-8] == '1':
+            if 'swiatlo hol' in lights:
+                set_light(w_mb, 'swiatlo hol', 0)
+            else:
+                set_light(w_mb, 'swiatlo hol', 1)
+        if b_inputs_1[-9] == '1':
+            if 'swiatlo Ola' in lights:
+                set_light(w_mb, 'swiatlo Ola', 0)
+            else:
+                set_light(w_mb, 'swiatlo Ola', 1)
+        if b_inputs_1[-7] == '1' or b_inputs_1[-16] == '1':
             if 'swiatlo nad schodami' in lights:
                 set_light(w_mb, 'swiatlo nad schodami', 0)
             else:
                 set_light(w_mb, 'swiatlo nad schodami', 1)
+        if b_inputs_1[-10] == '1':
+            if 'swiatlo Pawel' in lights:
+                set_light(w_mb, 'swiatlo Pawel', 0)
+            else:
+                set_light(w_mb, 'swiatlo Pawel', 1)
+        if b_inputs_1[-11] == '1':
+            if 'swiatlo Natka' in lights:
+                set_light(w_mb, 'swiatlo Natka', 0)
+            else:
+                set_light(w_mb, 'swiatlo Natka', 1)
+        if b_inputs_1[-12] == '1':
+            if 'swiatlo Natka 2' in lights:
+                set_light(w_mb, 'swiatlo Natka 2', 0)
+            else:
+                set_light(w_mb, 'swiatlo Natka 2', 1)
+        if b_inputs_1[-13] == '1':
+            if 'swiatlo pralnia' in lights:
+                set_light(w_mb, 'swiatlo pralnia', 0)
+            else:
+                set_light(w_mb, 'swiatlo pralnia', 1)
+        if b_inputs_1[-14] == '1':
+            if 'swiatlo sypialnia' in lights:
+                set_light(w_mb, 'swiatlo sypialnia', 0)
+            else:
+                set_light(w_mb, 'swiatlo sypialnia', 1)
+
+        if b_inputs_2[-1] == '1':
+            if 'swiatlo salon' in lights:
+                set_light(w_mb, 'swiatlo salon', 0)
+            else:
+                set_light(w_mb, 'swiatlo salon', 1)
+        if b_inputs_2[-2] == '1':
+            if 'swiatlo przejscie' in lights:
+                set_light(w_mb, 'swiatlo przejscie', 0)
+            else:
+                set_light(w_mb, 'swiatlo przejscie', 1)
+        if b_inputs_2[-3] == '1':
+            if 'swiatlo spizarnia' in lights:
+                set_light(w_mb, 'swiatlo spizarnia', 0)
+            else:
+                set_light(w_mb, 'swiatlo spizarnia', 1)
+        if b_inputs_2[-4] == '1':
+            if 'swiatlo lazienka gora' in lights:
+                set_light(w_mb, 'swiatlo lazienka gora', 0)
+            else:
+                set_light(w_mb, 'swiatlo lazienka gora', 1)
 
         sleep(0.1)
 

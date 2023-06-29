@@ -82,7 +82,11 @@ def main():
     # set_light(w_mb, 'swiatlo salon', 0)
     # set_light(w_mb, 'swiatlo hol', 0)
     while True:
-        inputs = w_mb.read_holding_registers(0,40)
+        try:
+            inputs = w_mb.read_holding_registers(0,40)
+        except:
+            sleep(0.5)
+            continue
         outs = wago_read_outputs(w_mb)
         lights = interprate_outputs(outs)
         print (lights)

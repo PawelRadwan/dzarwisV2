@@ -1,16 +1,13 @@
-lista = [1,2,3,4,5,6]
+import dzarwis_global_vars as dgv
+from pyModbusTCP.client import ModbusClient
 
-print(lista[-2])
+# def button_press_detector(list1, list2):
+#     if len (list1) == len(list2):
+#         for i in range(len(list1)):
+#             if
 
--6 jadalnia
-8 hol
-5 wiatrolap
-4 linkiety tv
-11 nati 17
+w_mb = ModbusClient(host = dgv.PLC.ip, unit_id=dgv.PLC.uid, port=dgv.PLC.port,auto_open=True,auto_close=True)
+inputs = await w_mb.read_holding_registers(0, 40)
+b_inputs_1=list('{0:016b}'.format(inputs[0]))
 
-druga
-
-1 salon
-2 przejscie
-3 spizarnia
-
+print(b_inputs_1)

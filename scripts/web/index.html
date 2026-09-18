@@ -169,6 +169,14 @@
   .actions-list li { padding: 5px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
   .actions-list li:first-child { border-top: 0; }
   .actions-list small { color: var(--muted); }
+  .now-line { margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--bg); font-weight: 600; }
+  .now-line span { font-weight: 400; color: var(--muted); }
+  .badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 650;
+           border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .badge.now { background: var(--pv); border-color: var(--pv); color: #fff; }
+  .badge.next { border-color: var(--accent); color: var(--accent); }
+  .badge.missed { border-color: var(--danger); color: var(--danger); }
+  .actions-list li.done { color: var(--muted); }
   .heat-offline .ctrl { opacity: .45; pointer-events: none; }
   .soon { padding: 48px 8px; text-align: center; color: var(--muted); }
   .soon strong { display: block; font-size: 18px; color: var(--text); margin-bottom: 6px; }
@@ -301,6 +309,7 @@
     </div>
     <div class="card">
       <h2 id="h-sched-title">Harmonogram</h2>
+      <div class="now-line" id="h-now"></div>
       <ul class="actions-list" id="h-sched"></ul>
     </div>
     <div class="card">
@@ -734,11 +743,25 @@
     setText('h-cocwu', io(d.co_on) + ' / ' + io(d.cwu_on));
 
     setText('h-sched-title', 'Harmonogram programu ' + d.program.nr + (d.program.opis ? ' · ' + d.program.opis : ''));
+    // co się teraz dzieje + zadania aktywnego programu ze stanem na dziś (czas sterownika)
+    var nowLine = $('h-now');
+    nowLine.textContent = 'Teraz: ' + (d.activity || '–');
     var sched = $('h-sched');
     sched.textContent = '';
-    var akcje = d.program.akcje || [];
-    if (!akcje.length) { var li0 = document.createElement('li'); li0.textContent = 'Brak akcji — program niczego nie uruchamia'; sched.appendChild(li0); }
-    akcje.forEach(function (a) { var li = document.createElement('li'); li.textContent = a; sched.appendChild(li); });
+    if (!d.schedule.length) { var li0 = document.createElement('li'); li0.textContent = 'Brak zadań — program niczego nie uruchamia'; sched.appendChild(li0); }
+    var inTime = function (min) { return min >= 60 ? Math.floor(min / 60) + ' h ' + (min % 60) + ' min' : min + ' min'; };
+    d.schedule.forEach(function (a) {
+      var li = document.createElement('li');
+      li.textContent = a.text;
+      if (a.start_pi) { var pi = document.createElement('small'); pi.textContent = '  (u nas ok. ' + a.start_pi + ')'; li.appendChild(pi); }
+      var label = { now: 'trwa', next: 'następne — za ' + inTime(a.in_min || 0), done: '✓ wykonano ' + (a.done_at || ''),
+                    missed: 'nie wykonano' }[a.status];
+      if (label) {
+        var b = document.createElement('span'); b.className = 'badge ' + a.status; b.textContent = label; li.appendChild(b);
+      }
+      if (a.status === 'done') li.className = 'done';
+      sched.appendChild(li);
+    });
 
     var acts = $('h-actions');
     acts.textContent = '';

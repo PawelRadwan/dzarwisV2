@@ -6,14 +6,15 @@ Sterownik pompy (Quotek, `192.168.1.31`) programuje się narzędziem `kotek_rpi`
 |---|---|
 | `kopia-2026-09-18/` | kopia wszystkich programów (1–5, S) sprzed zmian z 2026-09-18, XML + tekst, status, dziennik akcji |
 | `program-S-pusty.xml` | pusty program S (stały) — wgrany 2026-09-18 |
-| `program-3-bez-grzania.xml` | program 3 bez akcji — wgrany i aktywny od 2026-09-18 |
+| `program-3-bez-grzania.xml` | program 3 bez akcji — wgrany 2026-09-18 (zastąpiony) |
+| `program-3-pompy-10.xml` | program 3: codziennie 10:00 same pompy 15 min — wgrany i aktywny od 2026-09-18 |
 | `stare/` | wcześniejsze pliki programów z katalogu głównego projektu |
 
 ## Stan od 2026-09-18
 
 Pompa ma **nie grzać** (włączana z bezpiecznika po przerwie):
 
-- aktywny program **3 „bez grzania”** — brak akcji;
+- aktywny program **3 „bez grzania, pompy”** (`program-3-pompy-10.xml`) — jedna akcja: **codziennie 10:00 pompa kolektora i pompa CO po 15 min** (bez sprężarki). Godzina wg zegara sterownika (2026-09-18 spóźnia się ~62 min → realnie ok. 11:02);
 - program **S** pusty. Wcześniej zawierał codzienne grzanie o 08:21 (`pompaspecjal.xml` ze stycznia 2026 bez daty w akcji — wykonywało się każdego dnia);
 - programy 1, 2, 4 bez zmian. Program 3 „2h” nadpisany — oryginał w `kopia-2026-09-18/program-3.*`.
 

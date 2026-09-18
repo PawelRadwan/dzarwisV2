@@ -148,6 +148,53 @@ class ParseTest(unittest.TestCase):
             pompa.check_output('ERROR(  kotustmain.c/  553) Brak powierdzenia na wyslane polecenia\n')
 
 
+class ScheduleTest(unittest.TestCase):
+    # status z programem 4 (jak w nagranym harmonogramie i dzienniku akcji), zegar sterownika 13:03:57
+    def setUp(self):
+        self.kotek = FakeKotek()
+        self.kotek.status = STATUS.replace('nr="2" opis="bez grzania"', 'nr="3" opis="8h"')
+        self.now = time.mktime((2026, 9, 18, 14, 5, 0, 0, 0, -1))
+        self.hp = pompa.HeatPump(self.kotek, tempfile.mkdtemp(), clock=lambda: self.now, sleep=lambda s: None)
+        self.hp.poll(full=True)
+
+    def test_items_times(self):
+        items = pompa.parse_program(PROGRAM_4)['items']
+        self.assertEqual([(i['nr'], i['start'], i['end']) for i in items],
+                         [(1, '03:30', '06:00'), (2, '06:10', '06:15'), (3, '10:00', '13:00'),
+                          (4, '13:10', '13:15'), (5, '22:00', '00:30'), (6, '00:40', '00:45')])
+
+    def test_schedule_status(self):
+        sch = {i['nr']: i for i in self.hp.snapshot()['schedule']}
+        self.assertEqual(sch[1]['status'], 'done')
+        self.assertEqual(sch[1]['done_at'], '06:00')
+        self.assertEqual(sch[2]['status'], 'done')
+        self.assertEqual(sch[3]['status'], 'done')
+        self.assertEqual(sch[3]['done_at'], '10:00')
+        self.assertEqual(sch[4]['status'], 'next')
+        self.assertEqual(sch[4]['in_min'], 6)            # 13:10 - 13:03:57
+        self.assertEqual(sch[5]['status'], 'later')
+        self.assertEqual(sch[6]['status'], 'unknown')    # 00:40 - dziennik sterownika zaczyna się później
+
+    def test_schedule_now(self):
+        self.now += 7 * 60                                # zegar sterownika ~13:11 - w oknie pomp 13:10-13:15
+        sch = {i['nr']: i for i in self.hp.snapshot()['schedule']}
+        self.assertEqual(sch[4]['status'], 'now')
+        self.assertEqual(sch[5]['status'], 'next')
+
+    def test_activity(self):
+        self.assertEqual(self.hp.snapshot()['activity'], 'Awaria: Presostaty lub PWR')
+        self.kotek.status = status_grzanie('00:47:12').replace('<pompa id="co"  stan="0"/>', '<pompa id="co"  stan="1"/>')
+        self.hp.poll()
+        self.assertEqual(self.hp.snapshot()['activity'], 'Grzanie, pracuje pompa CO')
+        self.kotek.status = STATUS.replace('nazwa="AWARIA"', 'nazwa="CZEKA"').replace(
+            '<pompa id="kol"  stan="0"/>', '<pompa id="kol"  stan="1"/>')
+        self.hp.poll()
+        self.assertEqual(self.hp.snapshot()['activity'], 'Pracuje pompa kolektora')
+        self.kotek.status = STATUS.replace('nazwa="AWARIA"', 'nazwa="CZEKA"').replace('opis="Awaria           "', 'opis="Oczekiwanie"')
+        self.hp.poll()
+        self.assertEqual(self.hp.snapshot()['activity'], 'Spoczynek')
+
+
 class ManualProgramTest(unittest.TestCase):
     def test_program_s_one_time_action(self):
         xml, start = pompa.manual_heating_program('2026/09/18', '13:03:57', 60)

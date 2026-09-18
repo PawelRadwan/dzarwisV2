@@ -106,26 +106,93 @@ def _hhmm_add(hhmm, minutes):
 
 
 def describe_action(line):
-    # akcja z czytajprogram w zrozumiałej postaci; nieznane typy bez zmian
+    # akcja z czytajprogram: (opis, start, koniec, codzienna); start/koniec 'GG:MM' albo None
     line = re.sub(r'\s+', ' ', line).strip()
     m = re.match(r'Grzanie (.+?) (\d\d:\d\d) pco= ?([\d.]+) zew=.*?czas= ?(-?\d+)min$', line)
     if m:
         dni, godz, pco, czas = m.group(1), m.group(2), m.group(3).replace('.', ','), int(m.group(4))
+        daily = dni == 'codziennie'
         if czas < 0:            # czas ujemny: grzanie DO godziny akcji
-            return '%s %s–%s grzanie, powrót CO do %s °C' % (dni, _hhmm_add(godz, czas), godz, pco)
-        if czas > 0:
-            return '%s %s–%s grzanie, powrót CO do %s °C' % (dni, godz, _hhmm_add(godz, czas), pco)
-        return '%s od %s grzanie do temperatury, powrót CO %s °C' % (dni, godz, pco)
+            start, end = _hhmm_add(godz, czas), godz
+        elif czas > 0:
+            start, end = godz, _hhmm_add(godz, czas)
+        else:
+            return '%s od %s grzanie do temperatury, powrót CO %s °C' % (dni, godz, pco), godz, None, daily
+        return '%s %s–%s grzanie, powrót CO do %s °C' % (dni, start, end, pco), start, end, daily
     m = re.match(r'Pompy (.+?) (\d\d:\d\d) CZ\.KOL="(\d+)" CZ\.CO="(\d+)"$', line)
     if m:
-        return '%s %s pompy: kolektor %s min, CO %s min' % m.groups()
-    return line
+        dni, godz, kol, co = m.groups()
+        text = '%s %s pompy: kolektor %s min, CO %s min' % (dni, godz, kol, co)
+        return text, godz, _hhmm_add(godz, max(int(kol), int(co))), dni == 'codziennie'
+    return line, None, None, False
 
 
 def parse_program(text):
     opis = re.search(r'^Opis \.+ (.*)$', text, re.M)
-    akcje = [describe_action(a) for a in re.findall(r'^AK\. \d+: (.*)$', text, re.M)]
-    return {'opis': opis.group(1).strip() if opis else '', 'akcje': akcje}
+    items = []
+    for nr, line in re.findall(r'^AK\. (\d+): (.*)$', text, re.M):
+        desc, start, end, daily = describe_action(line)
+        items.append({'nr': int(nr), 'text': desc, 'start': start, 'end': end, 'daily': daily})
+    return {'opis': opis.group(1).strip() if opis else '', 'akcje': [i['text'] for i in items], 'items': items}
+
+
+def _minutes(hhmm):
+    return int(hhmm[:2]) * 60 + int(hhmm[3:5])
+
+
+def build_schedule(items, rows, program_nr, ctrl_now, diff_min):
+    # stan zadań aktywnego programu dziś wg zegara sterownika: now / done / next / later / missed / unknown
+    today = ctrl_now.strftime('%m/%d')
+    cur = ctrl_now.hour * 60 + ctrl_now.minute + ctrl_now.second / 60
+    today_rows = [r for r in rows if r[0] == today]
+    earliest = min((_minutes(r[1]) for r in today_rows), default=None)
+    done = {}
+    for data, czas, prog, akcja in today_rows:            # od najnowszej - pierwsze trafienie = ostatnie wykonanie
+        if prog == str(program_nr):
+            done.setdefault(akcja, czas)
+    out = []
+    for it in items:
+        e = dict(it, status='other', done_at=None, in_min=None, start_pi=None)
+        if it['start'] and diff_min and abs(diff_min) > 5:
+            e['start_pi'] = _hhmm_add(it['start'], -diff_min)
+        if it['daily'] and it['start']:
+            s = _minutes(it['start'])
+            en = _minutes(it['end']) if it['end'] else None
+            in_window = en is not None and en != s and ((s <= cur < en) if s < en else (cur >= s or cur < en))
+            if in_window:
+                e['status'] = 'now'
+            elif str(it['nr']) in done and s <= cur:
+                e['status'], e['done_at'] = 'done', done[str(it['nr'])]
+            elif s <= cur:
+                e['status'] = 'missed' if earliest is not None and earliest <= s else 'unknown'
+            else:
+                e['status'] = 'later'
+                e['in_min'] = int(s - cur)
+        out.append(e)
+    later = [e for e in out if e['status'] == 'later']
+    if later:
+        min(later, key=lambda e: e['in_min'])['status'] = 'next'
+    return out
+
+
+def activity(status):
+    # co się teraz dzieje - jedno zdanie
+    if status.get('fault'):
+        return 'Awaria: %s' % status['fault']
+    parts = []
+    if status.get('heating_left_s'):
+        parts.append('grzanie')
+    co, kol = status['pumps'].get('co'), status['pumps'].get('kol')
+    if co and kol:
+        parts.append('pracują pompy CO i kolektora')
+    elif co:
+        parts.append('pracuje pompa CO')
+    elif kol:
+        parts.append('pracuje pompa kolektora')
+    if not parts:
+        return 'Spoczynek'
+    text = ', '.join(parts)
+    return text[0].upper() + text[1:]
 
 
 def parse_program_list(text):
@@ -177,7 +244,7 @@ class HeatPump:
         self.sleep = sleep
         self.lock = threading.Lock()
         self.status = None
-        self.slow = {'program': None, 'programs': [], 'actions': []}
+        self.slow = {'program': None, 'programs': [], 'actions_text': ''}
         self.temps = []
         self.error = None
         self.updated = None
@@ -228,7 +295,7 @@ class HeatPump:
                 self.slow = {
                     'program': parse_program(self._kotek(['czytajprogram', '0'])),
                     'programs': parse_program_list(self._kotek(['listaprogramow'])),
-                    'actions': parse_actions(self._kotek(['wykonaneakcje']))[:12],
+                    'actions_text': self._kotek(['wykonaneakcje']),
                     'at': self.clock(),
                 }
             self.status, self.temps, self.error = status, temps, None
@@ -244,9 +311,16 @@ class HeatPump:
             return None
         s = self.status or {}
         diff = None
+        schedule = []
+        actions_text = self.slow.get('actions_text', '')
         if s.get('clock'):
             ctrl = time.mktime(time.strptime(s['clock'], '%Y/%m/%d %H:%M:%S'))
             diff = round((ctrl - self.status_at) / 60)
+            ctrl_now = datetime.datetime.fromtimestamp(ctrl + (self.clock() - self.status_at))
+            rows = [(d, c, p, a) for d, c, p, a in
+                    re.findall(r'^(\d\d/\d\d) (\d\d:\d\d):\d\d\s+(\S+)\s+(\S+)\s*$', actions_text, re.M)]
+            items = (self.slow['program'] or {}).get('items', [])
+            schedule = build_schedule(items, rows, s.get('program'), ctrl_now, diff)
         return {
             'ok': self.error is None,
             'error': self.error,
@@ -266,7 +340,9 @@ class HeatPump:
             'clock_diff_min': diff,
             'program': dict(self.slow['program'] or {}, nr=s.get('program')),
             'programs': [p for p in self.slow['programs'] if 1 <= p['nr'] <= 4],    # tylko te da się włączyć
-            'actions': self.slow['actions'],
+            'actions': parse_actions(actions_text)[:12],
+            'schedule': schedule,
+            'activity': activity(s) if s else None,
             'temps': self.temps,
             'manual': dict(self.manual),
         }

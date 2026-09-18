@@ -1,0 +1,8 @@
+Program nr ........... 3
+Opis ................. 2h
+Dogrzanie zewnetrzne . temp.=0.0 wsp=0 min/C 
+Dogrzanie wewn. 1 .... temp.=0.0 wsp=0 min/C 
+Dogrzanie wewn. 2 .... temp.=0.0 wsp=0 min/C 
+------------------------------------------
+AK. 1: Grzanie codziennie 12:56 pco= 30.0 zew=      czas=120min 
+AK. 2: Pompy   codziennie 15:10 CZ.KOL="5" CZ.CO="5"

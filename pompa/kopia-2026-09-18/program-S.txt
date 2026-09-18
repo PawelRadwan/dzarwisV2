@@ -1,0 +1,7 @@
+Program nr ........... 17
+Opis ................. specjal 24
+Dogrzanie zewnetrzne . temp.=0.0 wsp=0 min/C 
+Dogrzanie wewn. 1 .... temp.=0.0 wsp=0 min/C 
+Dogrzanie wewn. 2 .... temp.=0.0 wsp=0 min/C 
+------------------------------------------
+AK. 1: Grzanie codziennie 08:21 pco= 24.0 zew=      czas=  0min 

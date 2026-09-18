@@ -1,0 +1,85 @@
+program nr = 1
+Opis       = 6h
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 2
+Opis       = 4h
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 3
+Opis       = 2h
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 4
+Opis       = 8h
+Status     = poprawny
+Aktywny    = TAK
+
+program nr = 5
+Opis       = <pusty 5>
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 6
+Opis       = <pusty 6>
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 7
+Opis       = <pusty 7>
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 8
+Opis       = <pusty 8>
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 9
+Opis       = <pusty 9>
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 10
+Opis       = <pusty 10>
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 11
+Opis       = <pusty 11>
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 12
+Opis       = <pusty 12>
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 13
+Opis       = <pusty 13>
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 14
+Opis       = <pusty 14>
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 15
+Opis       = <pusty 15>
+Status     = poprawny
+Aktywny    = nie
+
+program nr = 16
+Opis       = <pusty 16>
+Status     = poprawny
+Aktywny    = nie
+
+program nr = S
+Opis       = specjal 24
+Status     = poprawny
+Aktywny    = TAK
+

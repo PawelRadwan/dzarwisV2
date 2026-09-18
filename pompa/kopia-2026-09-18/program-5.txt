@@ -1,0 +1,6 @@
+Program nr ........... 5
+Opis ................. <pusty 5>
+Dogrzanie zewnetrzne . temp.=0.0 wsp=0 min/C 
+Dogrzanie wewn. 1 .... temp.=0.0 wsp=0 min/C 
+Dogrzanie wewn. 2 .... temp.=0.0 wsp=0 min/C 
+------------------------------------------

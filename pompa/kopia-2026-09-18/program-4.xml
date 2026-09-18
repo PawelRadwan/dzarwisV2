@@ -1,0 +1,326 @@
+<pompa CfgVer="1.0">
+<!-- 
+  Zaplanowane uruchomienia
+  schemat:                   
+
+  <PROGRAM>
+  <DOGRZANIE>
+    <AKCJA>
+      <CZYNNOSC/>
+    </AKCJA>
+  </PROGRAM>
+  (jeden plik moze zawierac kilka programow)
+
+  __________________________________
+  PROGRAM:  to
+      <program numer="<numer>" opis="<opis>">
+      (<numer> to 1 2 3 4 lub S,  <opis> dowlony text do 20 znakow)
+      (Program "S" to program staly, zawsze dzialajacy)
+      Dodanie atrybutu sekundowy="1", spowoduje wykonywanie
+          programu co 1 sek. UWAGA tryb specjalny i nie powinien 
+          byc uzywany do wszystkich programow. 
+      ...
+  __________________________________
+  w praktyce element AKCJA to
+      <akcja data="YYYY/MM/DD" czas="GG:MM">
+      ...
+      </akcja>
+  lub (dni do wyboru kolejnosc dowolna)
+      <akcja dni="PN WT SR CZ PI SO ND" czas="GG:MM">
+      ...
+      </akcja>
+  lub
+      <akcja czas="GG:MM">
+      ...
+      </akcja>
+  konfiguracja wyjsc, (opcjonalnie). 0-wylacza, 1-wlacza, X-nie zmienia 
+  musi byc 16 znakow, pierwsze znak to pierwsze wyjscie triakowe, 9 znak to 
+  9 znak to pierwsze wyjscie stycznikow MOS. Wyjscia pomp i sprezarek sa ignorowane
+      <akcja czas="GG:MM" wyjscia="001100XX00110001">
+  Jesli czas="24h" to akcja jest wywolywana cyklicznie, zgodnie ustawieniem okresu
+  w konfiguracji, np co 10 min. Jesli atrybut czas="1m" to akcja wykonywana jest
+  w kazdym przesciu programotora czyli co 1 minute. Gdy czas="1s", to akcja  
+  jest wykonywana co 1 sekunde ale tylko gdy program jest sekundowy!
+      <akcja czas="24h"> ... 
+      <akcja czas="1m"> ... 
+  Flagi, uzycie flag: 
+      <akcja czas="GG:MM" flagi="<lista flag>" >
+  Lista flag, to lista identyfikatorow flag wylistowana po przecinku. 
+  Wszystkie flagi, ktore sa okreslone jako warunek musza byc aktywne (ustawione)
+  by akcja sie wykonala. Flagi poprzedzona znakiem "!"(negacja stanu) musza   byc skasowane by akcja sie wykonala. Ponadto, mozna okreslic rodzaj modyfikacji flagi po 
+  akcji, zgodnie z zasada: 
+   - Jesli identyfikator poprzedzimy znakiem "-" to flaga zostanie skasowana 
+     kiedy akcja sie wykona, taka flaga NIE JEST warunkiem wykonania akcji
+   - Jesli identyfikator poprzedzimy znakiem "~" to flaga zostanie zanegowana 
+     kiedy akcja sie wykona, taka flaga NIE JEST warunkiem wykonania akcji
+   - Jesli identyfikator zakonczymy znakiem "-" to flaga zostanie skasowana 
+     kiedy akcja sie wykona, taka flaga JEST warunkiem wykonania akcji
+   - Jesli identyfikator nie posiada zadnej modyfiakcji
+     to taka flaga JEST warunkiem wykonania akcji
+  Przyklad:
+      <akcja czas="1m" flagi="USR1,PROGRAM-,-ALARM,~USR3" >
+  Co oznacza: akcja sie wykona jesli ustawione beda flagi USR1 i PROGRAM,
+  flaga PROGRAM i ALARM zostanie skasowana a flaga USR3 zostanie zanegowana
+  jesli akcja sie wykona. Ustawienie czasu na "1m" praktycznie oznacza
+  iz Akcja zalezy tylko od flag, bo warunek czasowy jest zawsze spelniony.
+  Lista flag i ich opis dostepny jest po wykonaniu polecenie "flagidefinicje"
+  Przyklad:
+      <akcja czas="1m" flagi="USR1,!USR3" >
+  Co oznacza: akcja sie wykona jesli ustawiona bedzie flaga USR1 i skasowana USR3
+
+  __________________________________
+  czynnosci - brak
+  Moze nie byc brak czynnosci, sama akcja, przydatne 
+  do wlaczania wyjsc ktore sa w akcji i operacjach na flagach.
+  
+  __________________________________
+  czynnosci - GRZANIE, GRZANIE CWU
+      <grzanie pco="23.4" czas="134"/>
+  lub                                   
+      <grzanie pco="23.4"/>
+  lub
+      <grzanie czas="124"/>
+  grzanie CWU 
+      <grzaniecwu ... 
+  (pco - temp. powrotu z CO, max czas grzania w min)
+  (Jesli PCO nie ustawione to wezmie wartosc z ustawien glownych)
+  (czas ujemny to grzanie do okreslonej w akcji godziny (czas akcji to czas stop))
+
+  dodatkowo mozna wyspecyfikowac temperature zewnetrzna ktora uruchomi grzanie
+      <grzanie pco="23.4" czas="134" zew="-12"/>
+
+  akcja moze byc uruchomiona jesli dane wejscie binarne jest aktywne:
+  np
+      <grzanie pco="23.4" wej="1"/>
+  (wej - numer wejscia binarnego, od 0 do 7)
+
+  Dogrzanie aktywuje sie przez atrybut "dogrzanie"
+      <grzanie czas="134" dogrzanie="zew"/>
+  (wartosci to "zew" dogrznie od temp. zewnetrznej, "wew1" i "wew2" od wewnetrznych)
+
+  Warunki temperaturowe startu i zatrzymania. Poniekad zastepuja atrybut "zew" ktory jednak
+  dziala lacznie jesli jest wyspecyfikowany. Warunki sa dwa, startowy i zatrzymania. Warunki 
+  umozliwiaja temperaturowa prace pompy, to znaczy ze nie ustawia sie czasu grzania tylko temperature
+  do jakiej nalezy nagrzac system. Warunki porownuja dwie dowolne temperatury logiczne ze soba. 
+  Wyspecyfikowana temperarura histerezy jest dodawana lub odejmowana od drugiej temperatury 
+  w zaleznosci od znaku porownania (dodawna gdy temp1 > temp2 i odejmowana gdy znak jest przeciwny).
+  Warunki definiowane sa jako atrybuty "warunekstart" i "warunekstop". Wartosc atrybutu to 
+  cztery parametry rozdzielone przecinkami: <temp1>,<znak>,<temp2>,<1/2 histerezy>. np: 
+
+       <grzanie warunekstart="term1,pod,reg3,4.0"  warunekstop="term1,nad,reg3,4.0" />
+
+  ozancza, ze grzanie rozpocznie sie (jesli spelnione sa oczywiscie warunki czasowe akcji)
+  gdy temperatura czujnika nr 1 bedzie ponizej temperatury regulowanej nr 3 i zakonczy sie jesli 
+  temp. czujnika nr 1 bedzie powyzej temperatury regulowanej nr 3. Histereza to 8.0 stopni, po 4.0 
+  na kazda czesc. Wartosc <znak> to "pod" lub "nad". Oba warunki sa opcjonalne.
+  UWAGA: jesli zamiast "warunekstart" uzyte zostanie "warunekstartrozruch", to warunek startowy
+  zostanie sprawdzony dopiero po rozruchu pomp obiegowych, przydatne przy grzaniu na temp. C.O.
+
+  Wydluzenie czasu grzania poprzez wartosc przeliczona z temperatury:
+       <grzanie czas="120"  czastemp="krzywa2" />
+  ("czastemp" identyfikator temperatury logicznej)
+
+  uzycie "czastemp" spowoduje, ze czas grzania wyrazony przez atrybut "czas" zostanie 
+  powiekszony o minuty przeliczone z temperatury logicznej zdefiniowanej atrybutem "czastemp" 
+  0.1 stopnia to 1 minuta. Taki atrybut umozliwia regulacje czasu grzania poprzez krzywa.
+
+  __________________________________
+  czynnosci - TARYFA
+      <taryfa wartosc="NT" />
+  lub                                   
+      <taryfa wartosc="WT" />
+
+  __________________________________
+  czynnosci - SAME POMPY
+      <pompy czas_kol="3" czas_co="3" />
+  
+  Uruchamia same pompy obiegowe na zadana liczbe minut, 0 to brak wlaczenia
+  __________________________________
+  czynnosci - TERMOSTAT
+      <termostat nr="1" stan="1" />
+  lub                                   
+      <termostat nr="1" stan="0" warunek="term1,pod,reg3" />
+  
+  zalacza dzialanie termostatu o danym numerze, stan=0|1 to wylaczenie lub wlaczenie dzialania
+  Opcjonalnie mozna podac  warunek temperaturowy, taki sam jak w przypdaku czynnosci grzania 
+  tylko bez histerezy.
+  __________________________________
+  czynnosci - PWM
+      <pwm nr="1" czas="120"  okres="10"  impuls="2"  />
+  lub                                   
+      <pwm nr="2" czas="120"  okres="10"  impuls="2" warunek="term1,pod,reg3" />
+  lub                                   
+      <pwm nr="1" czas="120"  okres="10"  impuls="krzywa2"  />
+  
+  sterowanie wyjsciem PWM (regulowana szeroksc impulsu). Wyjscie PWM o numerze "nr"
+  bedzie zalaczane na "impuls" minut co "okres" minut przez "czas" minut.  
+  Impuls moze byc podany jako temperatura logiczna, wtedy 1 minuta to 0.1 stopnia.
+  Warunek startu temperaturowy (opcjonalny), taki sam jak w przypdaku czynnosci grzania
+  tylko bez histerezy.
+  __________________________________
+  czynnosci - Wl/Wyl akcji GRZANIA
+      <grzaniewlwyl co="1" cwu="0" warunek="term1,pod,reg3" />
+  
+  Wlacza lub wylacza uruchamianie grzania w programie. Gdzy "co" lub "cwu" nie jest  
+  podane, nic nie jest zmieniane. 0-wylacznie 1-wlaczenie. Opcjonalnie mozna podac 
+  warunek temperaturowy, taki sam jak w przypdaku czynnosci grzania tylko bez histerezy.
+  __________________________________
+  czynnosci - REGULACJA
+      <regulacja numer="1" temp="23.4"/>
+  lub                                   
+      <termostat numer="2" temp="-23.1" warunek="term1,pod,reg3" />
+  
+  Zmienia nastawe temperatur regulowanych. Mozna dodac opcjonalnie warunek temperaturowy
+  __________________________________
+  czynnosci - PROGRAM
+      <program numer="1" />
+  lub                                   
+      <program numer="2" warunek="term1,pod,reg3" />
+  
+  Zmiana programu. Mozna dodac opcjonalnie warunek temperaturowy. Jesli podamy "poprzedni"
+  zamiast numeru, program zmieni si� na poprzedni. Poprzedni program jest pamietany 
+  nawet po zaniku wylaczeniu sterownika.
+  __________________________________
+  czynnosci - OBLICZENIA na ZMIANIE TEMPERATURY
+      <obliczzmiane numer="1" czas="20" tempid="term1" dzialanie="roznica" />
+  
+  Oblicza proste formuly na podstawie wartosci dowolnej temperatury na poczatku i na koncu okresu.
+  Okres rozpoczyna sie w chwili wykonania akcji i konczy po czas zdefiniownaym w minutach. 
+  "numer" to pozycja od 1 do 6, "czas" podany w minutah, "termid" identyfikator temperatury logicznej,
+  "dzialanie" moze byc: roznica|suma|srednia|pamiec|min|max. Wynik dostepny jest jako temperatura logiczna 
+  w grupie "Zmiany temperatur" np: "zmiana1"
+  __________________________________
+  czynnosci - FLAGA 
+      <flaga id="USR4" wartosc="1"/>
+  lub              
+      <flaga id="USR4" wartosc="TIMER2"/>
+  lub              
+      <flaga id="USR3" wartosc="~GOTOWA"/>
+  lub              
+      <flaga id="USR3" wartosc="WE(2)"/>
+  lub              
+      <flaga id="USR5" wartosc="WE(5)>1"  warunek="term1,pod,reg3,3.0" />
+  
+  Zmiana flagi. Mozna dodac opcjonalnie warunek temperaturowy z histereza, taki 
+  sam jak w przypadku czynnosci grzania. Flaga powinna byc USR1..USR16. bez modyfikatora.
+  Atrybut "wartosc" definuje jaka wartosc przyjnmie flaga:
+    - "0"  skasowana
+    - "1"  ustawiona
+    - "<identyfikator flagi>"  ustawiona na wartosc podanej flagi
+    - "~<identyfikator flagi>"  ustawiona na zanegowana wartosc podanej flagi
+    - "WE(<numer>)"  ustawiona w zaleznosci od stanu wejscia <numer>
+    - "WE(<numer>)>0"  ustawiona gdy wejscie <numer> zmienilo stan 1->0
+    - "WE(<numer>)>1"  ustawiona gdy wejscie <numer> zmienilo stan 0->1
+    - "WY(<numer>)"  ustawiona w zaleznosci od stanu wyjscia <numer>
+  
+  __________________________________
+  czynnosci - LICZNIK 
+      <licznik numer="1" wartosc="10" />
+  lub                                   
+      <licznik numer="1" />
+  Licznik ustawiajacy flage licznika po osiagnieciu wartosci 0. Uzycie 
+  czynnosci z podana wartoscia ustawia licznik. Bez podanej wartosci 
+  zmniejsza wartosc licznika o 1. Moga byc maksymalnie 4 liczniki.
+  __________________________________
+  czynnosci - TIMER 
+      <licznik numer="1" okres="20" />
+  Timer - licznik czasowy (minutowy) odmierzajacy okres czasu. 
+  po odmierzeniu zadanego czasu, ustawia odpowiednia flage. 
+  Podanie okresu 0 wylacza timer bez ustwiania flagi
+  
+  __________________________________
+  czynnosci - STOP 
+      <stop/>
+  lub                                   
+      <stop warunek="term1,pod,reg3,3.0" />
+  Zatrzymanie/wylaczenie grzania. Mozna dodac opcjonalnie warunek temperaturowy z histereza,  
+  taki sam jak w przypadku czynnosci grzania.
+  __________________________________
+  czynnosci - BUFOR 
+     <bufor numer="1" arg1="11.1" dzialanie="kopia" />
+  lub                                   
+      <bufor numer="5" tempid1="term2" tempid2="term1" dzialanie="srednia" />
+  Wykonuje proste operacje dwuargumentowe i zapisuje je w buforach temperatur (temp.logicze) 
+  Dzialania: kopia(przypisanie wartosci), suma, roznica, srednia, min, max 
+  Argument moze byc temperatura logiczna, wtedy uzywamy "tempid1" | "tempid2" badz 
+  Temperatura podana bezposrednio, wtdy uzywamy "arg1" | "arg2".
+  __________________________________
+  czynnosci - ODBLOKUJ WYJSCIA 
+      <odblokujwyjscia />
+  Odblokowuje mozliwosc zmian w programi wyjsc krytycznych, tj sprezarki, zaworu  i pomp. 
+  __________________________________
+  czynnosci - PRZYWROC FLAGI 
+      <przywrocflagi />
+  Przywraca stan flag USR z poprzedniego programu. Przydatne gdy stan flag powinien 
+  przejsc z jednego programu do drugiego
+  __________________________________
+  czynnosci - TEKST 
+      <tekst napis="ala ma kota" />
+  Umieszcza napis w trzeciej linii ekranu spoczynkowego 
+  __________________________________
+  czynnosci - BLAD 
+      <blad numer="2" />
+  Powoduje zalogowanie bledu, numer od 1..16 
+  blad "z programu" o podanym numerze
+  __________________________________
+  czynnosci - NAPIECIE 
+      <napiecie numer="1" faza="3"/>
+      <napiecie numer="2" grupa="8"/>
+      <napiecie numer="3" faza="4" grupa="reg1"/>
+  Ustawia pozim regulacji fazowej lub (i) grupowej wyjscia, pozim 1..10. Wartosc "numer" 
+  to pozycja definicji regulacji z ustawien sterownika (nie jest to numer wyjscia!)
+  Jako wartosci, mozna podac identyfikator temperatury, wtedy wartosc zosta
+  z temperatury logicznej, ponizej 1 ustawi 1, powyzej 10 ustawi 10.
+  __________________________________
+  czynnosci - AKCJEPLUS 
+      <akcjeplus program="2" />
+  Powoduje doklejenie akcji z innego programu, to jest polaczenie dwoch programow w jeden.
+  Doklejone akcje beda dzialaly przy nastepnym wykonaniu cyklu programu.
+  __________________________________
+  czynnosci - LOGTEMP 
+      <logtemp prefix="AB" tempid1="pco" tempid2="zco"  tempid3="zew"  />
+  Zapami�tuje w logu temperatury logiczne, maksymalnie 3 na raz. Dwuznakowy prefix  
+  Sluzy do identyfikacji wpisu przy generacji wykresow, mozna go pominac.
+  __________________________________
+  czynnosci - SZYBKIPWM 
+      <szybkipwm wypelnienie="50" />
+  Ustawienie wps. wypelnienie szybkiego PWM, (UWAGA uzyty pin wejscia WEJ5!!!) 
+  Zakres od 1 do 100, mozna podac identyfikator temperatury logicznej
+-->
+<program numer="4" opis="8h">
+<akcja czas=" 6:00" ><grzanie pco="24.0" czas="-150" /></akcja>
+<akcja czas=" 6:10" ><pompy czas_kol="5" czas_co="5"/></akcja>
+<akcja czas="10:00" ><grzanie pco="24.0" czas="180" /></akcja>
+<akcja czas="13:10" ><pompy czas_kol="5" czas_co="5"/></akcja>
+<akcja czas="22:00" ><grzanie pco="24.0" czas="150" /></akcja>
+<akcja czas=" 0:40" ><pompy czas_kol="5" czas_co="5"/></akcja>
+
+<temperaturystale>
+   <!--
+   Temperatury stale, do ogolnego stosowania. Maksymalnie 6 pozycji
+    "temp"   - temperatura  
+    "opis"   - opis tekstowy
+   Przyklad:
+     <stala temp="55.0" opis="t.graniczna CWU" />
+   -->
+
+</temperaturystale>
+
+<regulacje>
+   <!--
+   Temperatury nastawiane recznie. maksymalnie 4 pozycji
+    "min"    - temperatura minimalna 
+    "max"    - temperatura maxymalna
+    "opis"   - opis tekstowy
+    "wejscie"- sterowanie wejsciem 1..8, jak wejscie 0 to wartosc min
+                 jake wejscie 1 to wartosc max, nie ruluje sie recznie, 
+                 brak tego atrubutu to sterowanie reczne
+   Przyklad:
+     <regulacja min="23.3" max="34.0" opis="regulacja CWU" />
+   -->
+
+</regulacje>
+
+</program>
+</pompa>
+

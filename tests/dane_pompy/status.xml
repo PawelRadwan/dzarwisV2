@@ -1,0 +1,82 @@
+<pompa>
+  <status dobry="1">
+    <czas godzina="13:03:57" data="2026/09/18 PI"/>
+    <stan opis="Awaria           " nazwa="AWARIA"/>
+    <awaria opis="Presostaty lub PWR" numer="5"/>
+    <restarty liczba="0" />
+      <grzanie>
+        <czasPracy  odStartu="00:00:00" doKonca="00:00:00"/>
+        <czasPracyMin  odStartu="0" doKonca="0"/>
+        <czasZalaczen start="00:00:00, 2000/00/00" stop="00:00:00, 2000/00/00" startmin="-1" stopmin="-1"/>
+        <przyczyna program="4" akcja="1"/>
+        <temperatury>
+          <temperatura id="coWyj" wartosc=" 0.0"/>
+          <temperatura id="coWej" wartosc=" 0.0"/>
+          <temperatura id="kolWej" wartosc=" 0.0"/>
+          <temperatura id="kolWyj" wartosc=" 0.0"/>
+          <temperatura id="par" wartosc=" 0.0"/>
+          <temperatura id="zewOpoz" wartosc=" 0.0"/>
+        </temperatury>
+        <czujniki>
+          <czujnik id="pwr" stan="0"/>
+          <czujnik id="hp" stan="0"/>
+          <czujnik id="lp" stan="0"/>
+        </czujniki>
+     </grzanie>
+     <aktywnyProgram nr="2" opis="bez grzania" />
+     <programator aktywny="1" />
+     <korekta wartosc="0" />
+     <pompy>
+       <pompa id="co"  stan="0"/>
+       <pompa id="kol"  stan="0"/>
+     </pompy>
+     <temperaturyAktualne>
+       <temperatura id="zew"       wartosc="-99.9"/>
+       <temperatura id="zewnOpoz"  wartosc="-99.9"/>
+       <temperatura id="wew1"      wartosc="-99.9"/>
+       <temperatura id="wew2"      wartosc="-99.9"/>
+       <temperatura id="zewMin24"  wartosc="-99.9"/>
+       <temperatura id="zewMax24"  wartosc="-99.9"/>
+       <temperatura id="zewChwil"  wartosc="-99.9"/>
+     </temperaturyAktualne>
+     <wejscia>
+      <wejscie nr="0" stan="0"/>
+      <wejscie nr="1" stan="0"/>
+      <wejscie nr="2" stan="1"/>
+      <wejscie nr="3" stan="1"/>
+      <wejscie nr="4" stan="1"/>
+      <wejscie nr="5" stan="1"/>
+      <wejscie nr="6" stan="1"/>
+      <wejscie nr="7" stan="1"/>
+     </wejscia>
+     <wyjscia>
+      <wyjscie nr="0" stan="0"/>
+      <wyjscie nr="1" stan="0"/>
+      <wyjscie nr="2" stan="0"/>
+      <wyjscie nr="3" stan="0"/>
+      <wyjscie nr="4" stan="1"/>
+      <wyjscie nr="5" stan="0"/>
+      <wyjscie nr="6" stan="0"/>
+      <wyjscie nr="7" stan="0"/>
+      <wyjscie nr="8" stan="0"/>
+      <wyjscie nr="9" stan="0"/>
+      <wyjscie nr="10" stan="0"/>
+      <wyjscie nr="11" stan="0"/>
+      <wyjscie nr="12" stan="0"/>
+      <wyjscie nr="13" stan="0"/>
+      <wyjscie nr="14" stan="0"/>
+      <wyjscie nr="15" stan="0"/>
+     </wyjscia>
+     <taryfa numer="1" opis="niska"/>
+     <energia>
+       <licznik taryfa="niska" impulsy="30887591" />
+       <licznik taryfa="wysoka" impulsy="1088216" />
+       <licznik taryfa="obie" impulsy="31975807" />
+     </energia>
+     <moc wartosc="0" />
+     <grzaniewlwyl>
+        <grzaniewlwylstan  typ="co" stan="1" />
+        <grzaniewlwylstan  typ="cwu" stan="0" />
+     </grzaniewlwyl>
+  </status>
+</pompa>

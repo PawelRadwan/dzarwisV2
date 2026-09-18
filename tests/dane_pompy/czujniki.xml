@@ -1,0 +1,16 @@
+<pompa ver="1.0" error="0">
+   <temperaturyczujnikow>
+     <temperaturaczujnik nr="1" aktywny="1" ok="1" funkcja="zco" t="19.3" tmin24="19.6" tmax24="20.3" tsr24="19.8" opis="#1" />
+     <temperaturaczujnik nr="2" aktywny="1" ok="1" funkcja="pko" t="18.9" tmin24="19.2" tmax24="19.8" tsr24="19.4" opis="#2" />
+     <temperaturaczujnik nr="3" aktywny="1" ok="1" funkcja="par" t="19.2" tmin24="19.4" tmax24="20.1" tsr24="19.7" opis="#3" />
+     <temperaturaczujnik nr="4" aktywny="1" ok="1" funkcja="zko" t="19.2" tmin24="19.6" tmax24="20.3" tsr24="19.8" opis="#4" />
+     <temperaturaczujnik nr="5" aktywny="1" ok="1" funkcja="pco" t="19.0" tmin24="19.3" tmax24="20.0" tsr24="19.6" opis="#5" />
+     <temperaturaczujnik nr="6" aktywny="0" ok="0" funkcja="brak" t="-99.9" tmin24="-99.9" tmax24="-99.9" tsr24="-99.9" opis="" />
+     <temperaturaczujnik nr="7" aktywny="0" ok="0" funkcja="brak" t="-99.9" tmin24="-99.9" tmax24="-99.9" tsr24="-99.9" opis="" />
+     <temperaturaczujnik nr="8" aktywny="0" ok="0" funkcja="brak" t="-99.9" tmin24="-99.9" tmax24="-99.9" tsr24="-99.9" opis="" />
+     <temperaturaczujnik nr="9" aktywny="0" ok="0" funkcja="brak" t="-99.9" tmin24="-99.9" tmax24="-99.9" tsr24="-99.9" opis="" />
+     <temperaturaczujnik nr="10" aktywny="0" ok="0" funkcja="brak" t="-99.9" tmin24="-99.9" tmax24="-99.9" tsr24="-99.9" opis="" />
+     <temperaturaczujnik nr="11" aktywny="0" ok="0" funkcja="brak" t="-99.9" tmin24="-99.9" tmax24="-99.9" tsr24="-99.9" opis="" />
+     <temperaturaczujnik nr="12" aktywny="0" ok="0" funkcja="brak" t="-99.9" tmin24="-99.9" tmax24="-99.9" tsr24="-99.9" opis="" />
+   </temperaturyczujnikow>
+</pompa>

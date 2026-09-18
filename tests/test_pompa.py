@@ -1,0 +1,275 @@
+# testy obsługi pompy ciepła przez kotek_rpi: python3 -m unittest discover -s tests
+import os
+import sys
+import tempfile
+import time
+import unittest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+
+import pompa  # noqa: E402
+
+DANE = os.path.join(ROOT, 'tests', 'dane_pompy')
+
+
+def dane(nazwa):
+    with open(os.path.join(DANE, nazwa), encoding='utf-8', errors='replace') as f:
+        return f.read()
+
+
+STATUS = dane('status.xml')             # nagrane 2026-09-18 13:03:57 (czas sterownika), awaria PWR, program 3
+CZUJNIKI = dane('czujniki.xml')
+PROGRAM_4 = dane('program-4.txt')
+AKCJE = dane('wykonaneakcje.txt')
+LISTA = dane('listaprogramow.txt')
+
+AKTPROGRAM = 'Aktywny program nr ... {nr}\nOpis ................. x\nStatus ............... poprawny\n'
+
+
+def strip_opts(args):
+    # polecenie bez opcji -b / -x <plik>
+    out, skip = [], False
+    for a in args:
+        if skip:
+            skip = False
+        elif a == '-x':
+            skip = True
+        elif a != '-b':
+            out.append(a)
+    return out
+
+
+def status_grzanie(do_konca='00:47:12', stan='GRZANIE'):
+    s = STATUS.replace('doKonca="00:00:00"', 'doKonca="%s"' % do_konca)
+    return s.replace('nazwa="AWARIA"', 'nazwa="%s"' % stan).replace('opis="Awaria           "', 'opis="Grzanie"')
+
+
+class FakeKotek:
+    # nagrane odpowiedzi kotek_rpi; zapisuje wywołania
+    def __init__(self):
+        self.calls = []
+        self.status = STATUS
+        self.fail = False
+        self.active = 3
+        self.program_files = []
+
+    def __call__(self, args):
+        self.calls.append(list(args))
+        if self.fail:
+            raise pompa.KotekError('Brak powierdzenia na wyslane polecenia')
+        cmd = strip_opts(args)[0]
+        if cmd == 'status':
+            return self.status
+        if cmd == 'odczytczujnikow':
+            return CZUJNIKI
+        if cmd == 'czytajprogram':
+            return PROGRAM_4
+        if cmd == 'wykonaneakcje':
+            return AKCJE
+        if cmd == 'listaprogramow':
+            return LISTA
+        if cmd == 'aktprogram':
+            return AKTPROGRAM.format(nr=self.active)
+        if cmd == 'wlaczprogram':
+            self.active = int(args[-1])
+            return 'setActPrg.programNr=%d [2]\n' % (self.active - 1)
+        if cmd == 'samepompy':
+            return ''
+        if cmd == 'program':
+            with open(args[-1]) as f:
+                self.program_files.append(f.read())
+            return ''
+        raise AssertionError('niedozwolone polecenie: %r' % (args,))
+
+
+class ParseTest(unittest.TestCase):
+    def test_status(self):
+        s = pompa.parse_status(STATUS)
+        self.assertEqual(s['state'], 'AWARIA')
+        self.assertEqual(s['state_text'], 'Awaria')
+        self.assertEqual(s['fault'], 'Presostaty lub PWR')
+        self.assertEqual(s['clock'], '2026/09/18 13:03:57')
+        self.assertEqual(s['program'], 3)           # w XML nr="2" - liczone od zera
+        self.assertEqual(s['pumps'], {'co': False, 'kol': False})
+        self.assertEqual(s['sensors'], {'pwr': False, 'hp': False, 'lp': False})
+        self.assertEqual(s['tariff'], 'niska')
+        self.assertEqual(s['power_w'], 0)
+        self.assertEqual(s['heating_left_s'], 0)
+        self.assertEqual(s['energy_kwh'], {'niska': 30887.591, 'wysoka': 1088.216, 'razem': 31975.807})
+        self.assertEqual((s['co_on'], s['cwu_on']), (True, False))
+
+    def test_status_heating(self):
+        s = pompa.parse_status(status_grzanie('01:02:03'))
+        self.assertEqual(s['heating_left_s'], 3723)
+        self.assertIsNone(s['fault'])
+
+    def test_sensors(self):
+        t = pompa.parse_sensors(CZUJNIKI)
+        self.assertEqual([x['funkcja'] for x in t], ['zco', 'pco', 'zko', 'pko', 'par'])  # kolejność wyświetlania
+        self.assertEqual(t[0], {'funkcja': 'zco', 'nazwa': 'Zasilanie CO', 't': 19.3, 'tmin': 19.6, 'tmax': 20.3})
+
+    def test_program(self):
+        p = pompa.parse_program(PROGRAM_4)
+        self.assertEqual(p['opis'], '8h')
+        self.assertEqual(p['akcje'][0], 'Grzanie codziennie 06:00 pco= 24.0 zew= czas=-150min')
+        self.assertEqual(len(p['akcje']), 6)
+
+    def test_program_list(self):
+        lst = pompa.parse_program_list(LISTA)
+        self.assertEqual(lst[0], {'nr': 1, 'opis': '6h', 'aktywny': False})
+        self.assertEqual([p['nr'] for p in lst], list(range(1, 17)))       # 5-16 puste sloty
+        self.assertTrue(lst[3]['aktywny'])
+
+    def test_actions_collapsed(self):
+        a = pompa.parse_actions(AKCJE)
+        self.assertEqual(a[0], {'data': '09/18', 'od': '10:00', 'do': '10:00', 'program': '4', 'akcja': '3', 'ile': 1})
+        run = next(x for x in a if x['ile'] > 1)
+        self.assertEqual((run['od'], run['do'], run['program'], run['akcja']), ('01:17', '03:20', '4', '1'))
+        self.assertEqual(run['ile'], 124)
+        self.assertEqual([(x['od'], x['program'], x['akcja']) for x in a[1:4]],
+                         [('08:21', 'S', '1'), ('06:10', '4', '2'), ('06:00', '4', '1')])
+
+    def test_kotek_error_detected(self):
+        with self.assertRaises(pompa.KotekError):
+            pompa.check_output('ERROR(  kotustmain.c/  553) Brak powierdzenia na wyslane polecenia\n')
+
+
+class ManualProgramTest(unittest.TestCase):
+    def test_program_s_one_time_action(self):
+        xml, start = pompa.manual_heating_program('2026/09/18', '13:03:57', 60)
+        self.assertEqual(start, '2026/09/18 13:05')      # sekundy >= 45 -> +2 min
+        self.assertIn('<program numer="S"', xml)
+        self.assertIn('<akcja data="2026/09/18" czas="13:05"><grzanie czas="60"/></akcja>', xml)
+
+    def test_program_s_early_seconds(self):
+        self.assertEqual(pompa.manual_heating_program('2026/09/18', '13:03:10', 30)[1], '2026/09/18 13:04')
+
+    def test_program_s_over_midnight(self):
+        xml, start = pompa.manual_heating_program('2026/12/31', '23:59:50', 90)
+        self.assertEqual(start, '2027/01/01 00:01')
+        self.assertIn('data="2027/01/01" czas="00:01"', xml)
+
+
+class HeatPumpTest(unittest.TestCase):
+    def setUp(self):
+        self.kotek = FakeKotek()
+        self.tmp = tempfile.mkdtemp()
+        self.now = time.mktime((2026, 9, 18, 14, 5, 0, 0, 0, -1))
+        self.hp = pompa.HeatPump(self.kotek, self.tmp, clock=lambda: self.now, sleep=lambda s: None)
+
+    def cmds(self):
+        return [strip_opts(c) for c in self.kotek.calls]
+
+    def test_snapshot(self):
+        self.assertIsNone(self.hp.snapshot())
+        self.hp.poll(full=True)
+        s = self.hp.snapshot()
+        self.assertTrue(s['ok'])
+        self.assertEqual(s['state'], 'AWARIA')
+        self.assertEqual(s['program']['nr'], 3)
+        self.assertEqual([p['nr'] for p in s['programs']], [1, 2, 3, 4])
+        self.assertEqual(len(s['temps']), 5)
+        self.assertEqual(s['clock_diff_min'], -61)          # 13:03:57 wobec 14:05:00
+        self.assertEqual(s['manual'], {'pumps_co_until': None, 'pumps_kol_until': None,
+                                       'heating_start': None, 'heating_start_ts': None, 'heating_until': None})
+
+    def test_connection_lost(self):
+        self.hp.poll(full=True)
+        self.kotek.fail = True
+        self.hp.poll()
+        s = self.hp.snapshot()
+        self.assertFalse(s['ok'])
+        self.assertIn('Brak', s['error'])
+
+    def test_set_program(self):
+        self.hp.poll(full=True)
+        self.hp.set_program(4)
+        self.assertIn(['wlaczprogram', '4'], self.cmds())
+        self.assertIn(['aktprogram'], self.cmds())
+
+    def test_set_program_validation(self):
+        for bad in (0, 5, '2', None, 3.5):
+            with self.assertRaises(ValueError):
+                self.hp.set_program(bad)
+        self.assertNotIn('wlaczprogram', [c[0] for c in self.cmds()])
+
+    def test_set_program_not_confirmed(self):
+        self.kotek.active = 3
+        orig = self.kotek.__call__
+        self.hp.runner = lambda args: '' if 'wlaczprogram' in args else orig(args)
+        with self.assertRaises(pompa.KotekError):
+            self.hp.set_program(1)
+
+    def test_pumps(self):
+        self.hp.poll(full=True)
+        self.hp.pumps(co_min=15, kol_min=0)
+        self.assertIn(['samepompy', '0', '15'], self.cmds())    # samepompy <kolektor> <CO>
+        m = self.hp.snapshot()['manual']
+        self.assertEqual(m['pumps_co_until'], int(self.now + 15 * 60))
+        self.assertIsNone(m['pumps_kol_until'])
+
+    def test_pumps_both_and_persisted(self):
+        self.hp.pumps(co_min=20, kol_min=20)
+        self.assertIn(['samepompy', '20', '20'], self.cmds())
+        hp2 = pompa.HeatPump(self.kotek, self.tmp, clock=lambda: self.now, sleep=lambda s: None)
+        hp2.poll(full=True)
+        self.assertEqual(hp2.snapshot()['manual']['pumps_kol_until'], int(self.now + 20 * 60))
+
+    def test_pumps_validation(self):
+        for co, kol in ((0, 0), (121, 0), (-1, 5), (15.5, 0), ('15', 0), (True, 0)):
+            with self.assertRaises(ValueError):
+                self.hp.pumps(co_min=co, kol_min=kol)
+        self.assertNotIn('samepompy', [c[0] for c in self.cmds()])
+
+    def test_stop_pumps(self):
+        self.hp.pumps(co_min=15, kol_min=15)
+        self.hp.stop_pumps()
+        self.assertEqual([c for c in self.cmds() if c[0] == 'samepompy'][-1], ['samepompy', '0', '0'])
+        self.hp.poll(full=True)
+        m = self.hp.snapshot()['manual']
+        self.assertIsNone(m['pumps_co_until'])
+        self.assertIsNone(m['pumps_kol_until'])
+
+    def test_expired_pumps_cleared(self):
+        self.hp.pumps(co_min=1, kol_min=0)
+        self.now += 120
+        self.hp.poll(full=True)
+        self.assertIsNone(self.hp.snapshot()['manual']['pumps_co_until'])
+
+    def test_manual_heating(self):
+        self.hp.poll(full=True)
+        self.hp.manual_heating(1)
+        self.assertEqual(len(self.kotek.program_files), 1)
+        self.assertIn('<akcja data="2026/09/18" czas="13:05"><grzanie czas="60"/></akcja>', self.kotek.program_files[0])
+        m = self.hp.snapshot()['manual']
+        self.assertEqual(m['heating_start'], '13:05')
+        # start za ~63 s wg zegara sterownika (13:03:57 -> 13:05:00), koniec godzinę później
+        self.assertEqual(m['heating_start_ts'], int(self.now + 63))
+        self.assertEqual(m['heating_until'], int(self.now + 63 + 3600))
+
+    def test_manual_heating_validation(self):
+        self.hp.poll(full=True)
+        for bad in (0, 0.25, 8.5, '1', None):
+            with self.assertRaises(ValueError):
+                self.hp.manual_heating(bad)
+        self.assertEqual(self.kotek.program_files, [])
+
+    def test_manual_heating_needs_status(self):
+        with self.assertRaises(pompa.KotekError):
+            self.hp.manual_heating(1)                     # brak odczytu czasu sterownika
+
+    def test_only_allowed_commands(self):
+        self.hp.poll(full=True)
+        self.hp.set_program(2)
+        self.hp.pumps(co_min=5, kol_min=5)
+        self.hp.stop_pumps()
+        self.hp.manual_heating(0.5)
+        allowed = {'status', 'odczytczujnikow', 'czytajprogram', 'listaprogramow', 'wykonaneakcje',
+                   'aktprogram', 'wlaczprogram', 'samepompy', 'program'}
+        self.assertTrue({c[0] for c in self.cmds()} <= allowed)
+        self.assertEqual(pompa.kotek_args(['status']), ['--adres', '192.168.1.31', 'status'])
+
+
+if __name__ == '__main__':
+    unittest.main()

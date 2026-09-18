@@ -138,8 +138,9 @@ class EnergyStore:
 
     def first_meter_sample(self, start, end):
         # (ts, import_kwh, export_kwh, pv_today_kwh) - początek okresu bilansu dnia
+        # tylko minuty z energią zbilansowaną - produkcja w bilansie liczona od tej samej chwili co pobór/oddanie
         rows = self._query('SELECT ts, import_kwh, export_kwh, pv_today_kwh FROM samples WHERE ts >= ? AND ts < ? '
-                           'AND import_kwh IS NOT NULL ORDER BY ts LIMIT 1', (start, end))
+                           'AND bal_import_wh IS NOT NULL ORDER BY ts LIMIT 1', (start, end))
         return tuple(rows[0]) if rows else None
 
     def last_pv_today(self, start, end):

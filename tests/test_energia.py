@@ -197,6 +197,16 @@ class CollectorTest(unittest.TestCase):
         self.assertAlmostEqual(d['home_kwh'], 0.3 - 0.1, places=2)
         self.assertEqual(d['self_use_pct'], round((0.3 - 0.1) / 0.3 * 100))
 
+    def test_balance_starts_with_balanced_data(self):
+        # wiersze sprzed wprowadzenia bilansowania (bez bal_*) nie mogą wyznaczać początku bilansu dnia
+        self.store.add(int(local_ts(13, 10)), 3000, -2000, 1000, 12.8, 29700.0, 41000.0, 22740.0)
+        self.set_pv_today(19.8)
+        self.polls(local_ts(15, 12), -36000, 3)               # oddanie 0.1 kWh
+        d = self.col.snapshot()['today']
+        self.assertEqual(d['since'], int(local_ts(15, 12)))
+        self.assertAlmostEqual(d['balance_pv_kwh'], 0.0)
+        self.assertIsNone(d['self_use_pct'])
+
     def test_new_day_resets_balance(self):
         t = self.polls(local_ts(23, 59, 50), 36000, 2)        # 50 Wh jeszcze 18.09
         self.polls(local_ts(0, 0, 0, day=19), 36000, 1)       # 50 Wh już 19.09

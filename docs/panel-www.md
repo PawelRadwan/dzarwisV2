@@ -22,6 +22,7 @@ Strona otwiera się wtedy jak aplikacja, na pełnym ekranie, jako „Dżarwis”
 ## Zakładka PV
 
 - **Kafelki:** produkcja teraz, sieć („Oddawanie ↑” / „Pobór ↓”), zużycie domu (= produkcja + sieć), produkcja dziś.
+- **Moc na fazach** (L1–L3): zużycie domu i pobór/oddawanie z sieci na każdej fazie, napięcie i prąd. Falownik jest jednofazowy, na **L1** (`INVERTER_PHASE` w `energia.py`) — tam dom = sieć + produkcja, na L2/L3 dom = sieć.
 - **Wykres dnia** (00:00–24:00): produkcja — pomarańczowe pole, zużycie domu — niebieska linia. Dotknięcie / najechanie pokazuje godzinę i obie wartości. Przerwa w linii = brak danych (np. restart Pi).
 - **Bilans dnia:** produkcja / pobrano / oddano / zużycie domu [kWh], autokonsumpcja (jaka część produkcji została w domu). Wszystkie wartości za ten sam okres — od pierwszego odczytu po północy; jeśli dane zaczęły się później (np. po restarcie Pi bez wcześniejszych danych), obok tytułu jest „od HH:MM”, a produkcja w bilansie może być mniejsza niż w kafelku „Produkcja dziś” (ten jest zawsze od północy, z falownika).
 - **Stringi PV** i **Falownik** (status, temperatura, częstotliwość, kody błędów, liczniki łączne).
@@ -69,7 +70,7 @@ Serwer wydaje tylko pliki z listy `STATIC` w `web_panel.py` — nic innego z dys
 | `GET /api/lights` | — | `{"lights": [{"id": "swiatlo kuchnia", "label": "Kuchnia", "on": true}, …]}` |
 | `POST /api/lights` | `{"id": "swiatlo kuchnia", "on": false}` | lista jak wyżej, już po zmianie |
 | `POST /api/lights/all-off` | — | lista jak wyżej |
-| `GET /api/pv` | — | stan na żywo: `now`, `today`, `strings`, `inverter`, `totals`, `meter_ok`, `inverter_ok`; `503` do pierwszego odczytu |
+| `GET /api/pv` | — | stan na żywo: `now`, `today`, `phases`, `strings`, `inverter`, `totals`, `meter_ok`, `inverter_ok`; `503` do pierwszego odczytu |
 | `GET /api/pv/day` | — | `{"date": "2026-09-18", "points": [[ts, pv_w, home_w], …]}` — dzisiejsze minuty |
 
 `on` to **docelowy stan**, nie „przełącz” — powtórzone żądanie niczego nie psuje, a zapis do WAGO jest wykonywany tylko wtedy, gdy stan się zmienia.

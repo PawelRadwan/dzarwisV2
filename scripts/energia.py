@@ -15,6 +15,7 @@ GROWATT_UID = 2
 METER_UID = 3
 POLL_INTERVAL = 5       # s, odczyt urządzeń
 MODBUS_TIMEOUT = 2      # s
+INVERTER_PHASE = 1      # falownik jednofazowy podłączony do L1 (sprawdzone: L1 oddaje tyle, ile produkuje)
 
 STATUS_TEXT = {0: 'Oczekiwanie', 1: 'Praca', 3: 'Awaria'}
 
@@ -54,6 +55,7 @@ def decode_meter(regs_0, regs_52, regs_72):
     # SDM630: float32 big-endian; regs_0: rejestry 0-17, regs_52: moc łączna, regs_72: energia pobrana/oddana
     return {
         'voltages': [_f32(regs_0, i) for i in (0, 2, 4)],
+        'currents': [_f32(regs_0, i) for i in (6, 8, 10)],
         'phase_w': [_f32(regs_0, i) for i in (12, 14, 16)],
         'grid_w': _f32(regs_52, 0),
         'import_kwh': _f32(regs_72, 0),
@@ -212,12 +214,24 @@ class Collector:
             if bal_pv > 0:
                 today['self_use_pct'] = round(min(max((bal_pv - exp) / bal_pv * 100, 0), 100))
 
+        # moc na fazach; dom na fazie falownika = sieć + produkcja
+        phases = []
+        if m:
+            for i in range(3):
+                grid = round(m['phase_w'][i], 1)
+                on_inverter = i + 1 == INVERTER_PHASE
+                phases.append({'name': 'L%d' % (i + 1), 'v': round(m['voltages'][i], 1),
+                               'a': round(m['currents'][i], 2), 'grid_w': grid,
+                               'home_w': round(grid + pv_w, 1) if on_inverter else grid,
+                               'inverter': on_inverter})
+
         snapshot = {
             'updated': int(now),
             'meter_ok': m is not None,
             'inverter_ok': g is not None,
             'now': {'pv_w': pv_w, 'grid_w': grid_w, 'home_w': home_w},
             'today': today,
+            'phases': phases,
             'strings': g['strings'] if g else [],
             'inverter': {k: g[k] for k in ('status', 'status_text', 'temp_c', 'freq_hz', 'fault', 'warning')} if g
             else {'status': None, 'status_text': 'Nie odpowiada', 'temp_c': None, 'freq_hz': None,

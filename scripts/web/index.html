@@ -133,6 +133,12 @@
   .rows { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; margin: 10px 0 0; }
   .rows dt { color: var(--muted); }
   .rows dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .phases { display: grid; grid-template-columns: minmax(0, 1.3fr) 1fr 1fr; gap: 10px 12px; margin-top: 10px; align-items: baseline; }
+  .phases .h { font-size: 13px; color: var(--muted); text-align: right; }
+  .phases .n { font-weight: 700; }
+  .phases .n small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .phases .v { text-align: right; font-weight: 600; font-size: 17px; font-variant-numeric: tabular-nums; }
+  .phases .v small { display: block; white-space: nowrap; font-weight: 400; font-size: 12px; color: var(--muted); }
   .strings { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
   .string { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
   .string .w { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -165,6 +171,10 @@
       <div class="stat"><span class="stat-label" id="grid-label">Sieć</span><span class="stat-value" id="grid-now">–</span></div>
       <div class="stat"><span class="stat-label">Zużycie domu</span><span class="stat-value" id="home-now">–</span></div>
       <div class="stat"><span class="stat-label">Produkcja dziś</span><span class="stat-value" id="pv-today">–</span></div>
+    </div>
+    <div class="card">
+      <h2>Moc na fazach</h2>
+      <div class="phases" id="phases"></div>
     </div>
     <div class="card">
       <div class="card-head">
@@ -368,6 +378,24 @@
     setText('b-self', t.self_use_pct == null ? null : t.self_use_pct + '%');
     var midnight = new Date(); midnight.setHours(0, 5, 0, 0);
     setText('since', t.since && t.since * 1000 > midnight.getTime() ? 'od ' + hhmm(t.since) : '');
+
+    // moc na fazach: dom i sieć; falownik jednofazowy - jego faza oznaczona
+    var ph = $('phases');
+    ph.textContent = '';
+    var cell = function (cls, text, sub) {
+      var c = document.createElement('div'); c.className = cls; c.textContent = text;
+      if (sub) { var s = document.createElement('small'); s.textContent = sub; c.appendChild(s); }
+      ph.appendChild(c);
+    };
+    if (!d.phases.length) cell('n', 'Brak danych z licznika');
+    else {
+      cell('h', ''); cell('h', 'Dom'); cell('h', 'Sieć');
+      d.phases.forEach(function (f) {
+        cell('n', f.name, num(f.v, 0) + ' V · ' + num(f.a, 1) + ' A' + (f.inverter ? ' · falownik' : ''));
+        cell('v', kw(f.home_w) + ' kW');
+        cell('v', kw(Math.abs(f.grid_w)) + ' kW', f.grid_w < 0 ? 'oddawanie ↑' : 'pobór ↓');
+      });
+    }
 
     var box = $('strings');
     box.textContent = '';

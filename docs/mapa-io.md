@@ -104,7 +104,7 @@ Odczyt: input registers 0–19, liczby `float32`, big-endian (bajty i słowa).
 | Rejestry | Pole | Zapis do InfluxDB |
 |---|---|---|
 | 0–1, 2–3, 4–5 | napięcia V1, V2, V3 | `licznik.V1..V3` |
-| 6–7, 8–9, 10–11 | prądy I1, I2, I3 | dekodowane, **nie zapisywane** |
+| 6–7, 8–9, 10–11 | prądy I1, I2, I3 | `read_power.py`: dekodowane, nie zapisywane; panel WWW: karta „Moc na fazach” |
 | 12–13, 14–15, 16–17 | moce P1, P2, P3 | `licznik.P1..P3` |
 | 52–53 | moc łączna (ujemna = oddawanie) | panel WWW |
 | 72–73 / 74–75 | energia pobrana / oddana łącznie [kWh] | panel WWW |

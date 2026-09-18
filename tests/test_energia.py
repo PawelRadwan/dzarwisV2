@@ -200,6 +200,22 @@ class CollectorTest(unittest.TestCase):
         self.assertAlmostEqual(t['import_kwh'], 0.0)
         self.assertEqual(t['since'], int(local_ts(0, 1, day=19)))
 
+    def test_phases(self):
+        # falownik jednofazowy na L1: dom na L1 = sieć L1 + produkcja, na L2/L3 = sieć
+        self.col.poll()
+        ph = self.col.snapshot()['phases']
+        self.assertEqual([p['name'] for p in ph], ['L1', 'L2', 'L3'])
+        self.assertEqual([p['grid_w'] for p in ph], [-3421.0, 166.1, 61.6])
+        self.assertEqual([p['home_w'] for p in ph], [round(-3421.03 + 3596.9, 1), 166.1, 61.6])
+        self.assertEqual([p['v'] for p in ph], [247.5, 245.0, 245.4])
+        self.assertAlmostEqual(ph[0]['a'], energia.decode_meter(METER_0, METER_52, METER_72)['currents'][0], places=1)
+        self.assertEqual([p['inverter'] for p in ph], [True, False, False])
+
+    def test_phases_meter_down(self):
+        self.gw.fail = {3}
+        self.col.poll()
+        self.assertEqual(self.col.snapshot()['phases'], [])
+
     def test_inverter_asleep(self):
         self.col.poll()                       # dzień: produkcja dziś 12.3
         self.now += 120

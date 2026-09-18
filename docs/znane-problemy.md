@@ -29,7 +29,7 @@ W v1 (`lihgts.py:143`) światło nad schodami reagowało na bit 6 **i bit 15** r
 
 ### 3. Wyścig zapisu między procesami
 
-Przełączenie lampy to: odczyt → zmiana bitu → zapis całego 16-bitowego rejestru. Jeśli `lights_v2_.py` i `wago_750_comunication.py` (albo dwa przyciski w jednym obiegu) zapiszą ten sam rejestr jednocześnie, zmiana jednego procesu może cofnąć zmianę drugiego.
+Przełączenie lampy to: odczyt → zmiana bitu → zapis całego 16-bitowego rejestru. Jeśli `lights_v2_.py` i `web_panel.py` (albo `wago_750_comunication.py`) zapiszą ten sam rejestr jednocześnie, zmiana jednego procesu może cofnąć zmianę drugiego.
 
 **Naprawa:** jeden proces jako jedyny właściciel zapisów (np. przyciski też przez kolejkę) albo przełączanie pojedynczych cewek (`write_single_coil`), jeśli WAGO je udostępnia.
 

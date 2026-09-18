@@ -10,7 +10,7 @@
 | Falownik Growatt | bramka, unit id `2` | produkcja PV |
 | Licznik energii | bramka, unit id `3` | napięcia, prądy, moce na fazach |
 
-> **Stan produkcyjny (2026-09-18):** na Raspberry Pi `192.168.8.18` działa tylko obsługa przycisków (`lights.service`). Kolejka RabbitMQ, InfluxDB, rejestrator energii i sterowanie bojlerem opisane niżej istnieją w kodzie, ale nie są tam uruchomione. Szczegóły: [uruchomienie.md](uruchomienie.md#serwer-produkcyjny-stan-z-2026-09-18).
+> **Stan produkcyjny (2026-09-18):** na Raspberry Pi `192.168.8.18` działa obsługa przycisków (`lights.service`) i panel WWW (`web.service`, [panel-www.md](panel-www.md)). Kolejka RabbitMQ, InfluxDB, rejestrator energii i sterowanie bojlerem opisane niżej istnieją w kodzie, ale nie są tam uruchomione. Szczegóły: [uruchomienie.md](uruchomienie.md#serwer-produkcyjny-stan-z-2026-09-18).
 
 PLC nie ma własnej logiki oświetlenia (a przynajmniej kod na to nie wskazuje). To Raspberry Pi odczytuje przyciski i ustawia wyjścia. **Jeśli Pi albo skrypt nie działa, przyciski nie działają.**
 

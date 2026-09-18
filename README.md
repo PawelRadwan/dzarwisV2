@@ -8,6 +8,7 @@ flowchart LR
     WAGO -->|DO| L[Lampy, bojler]
     subgraph RPi[Raspberry Pi]
         LIGHTS[lights_v2_.py]
+        WEB[web_panel.py<br/>panel WWW :80]
         COMM[wago_750_comunication.py]
         MQ[(RabbitMQ<br/>kolejka 'wago')]
         POWER[read_power.py]
@@ -15,6 +16,8 @@ flowchart LR
         DB[(InfluxDB 1.x<br/>baza 'Energia')]
     end
     LIGHTS <-->|Modbus TCP| WAGO
+    TEL[Telefon] -->|HTTP| WEB
+    WEB <-->|Modbus TCP| WAGO
     COMM <-->|Modbus TCP| WAGO
     MQ --> COMM
     GW[Bramka Modbus<br/>192.168.8.40] --- GRO[Growatt uid 2]
@@ -29,6 +32,7 @@ flowchart LR
 | Plik | Rola | Status |
 |---|---|---|
 | `scripts/lights_v2_.py` | Obsługa przycisków: zbocze opadające na wejściu WAGO przełącza przypisaną lampę | **produkcyjny** — usługa `lights.service` na Pi |
+| `scripts/web_panel.py` + `scripts/web/` | Panel WWW na telefon: włączanie/wyłączanie świateł, http://192.168.8.18/ | **produkcyjny** — usługa `web.service` na Pi |
 | `scripts/wago_750_comunication.py` | Sterowanie wyjściami WAGO poleceniami JSON z kolejki RabbitMQ | nieuruchomiony na Pi (wymaga Pythona ≥ 3.9) |
 | `scripts/read_power.py` | Co 10 s odczyt Growatta i licznika, zapis do InfluxDB | nieuruchomiony na Pi |
 | `scripts/bojler_ster.py` | Logika grzania bojlera (taryfa, nadwyżka PV) — **tylko wypisuje decyzje** | niedokończony |
@@ -50,10 +54,11 @@ python lights_v2_.py
 
 Wymagania środowiska: Python ≥ 3.7 (produkcyjne Pi ma 3.7.3; `wago_750_comunication.py` wymaga ≥ 3.9), sieć 192.168.8.0/24 (WAGO, bramka Modbus), RabbitMQ i InfluxDB 1.x na localhost (tylko dla skryptów, które ich używają).
 
-Na produkcyjnym Raspberry Pi skrypt działa jako usługa systemd `lights.service`. Jej pliki są w [`deploy/systemd/`](deploy/systemd/).
+Na produkcyjnym Raspberry Pi skrypt działa jako usługa systemd `lights.service`. Panel WWW działa jako `web.service`. Pliki usług są w [`deploy/systemd/`](deploy/systemd/).
 
 ## Dokumentacja
 
+- [Panel WWW — obsługa, API, zmiana nazw](docs/panel-www.md)
 - [Architektura i przepływ danych](docs/architektura.md)
 - [Mapa wejść/wyjść i rejestrów Modbus](docs/mapa-io.md)
 - [Opis skryptów i funkcji](docs/skrypty.md)

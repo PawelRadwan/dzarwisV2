@@ -14,7 +14,7 @@
 
 ### Co faktycznie działa
 
-Na Pi działa **wyłącznie** `lights_v2_.py` jako usługa systemd `lights.service`. Pozostałe skrypty (`read_power.py`, `wago_750_comunication.py`, `bojler_ster.py`) **nie są tu uruchomione** — nie ma też RabbitMQ, InfluxDB ani bibliotek `pika`, `influxdb`, `pymodbus`.
+Na Pi działają dwie usługi systemd: `lights.service` (`lights_v2_.py`, przyciski ścienne) i `web.service` (`web_panel.py`, panel WWW na porcie 80 — [panel-www.md](panel-www.md)). Pozostałe skrypty (`read_power.py`, `wago_750_comunication.py`, `bojler_ster.py`) **nie są tu uruchomione** — nie ma też RabbitMQ, InfluxDB ani bibliotek `pika`, `influxdb`, `pymodbus`.
 
 ### `/etc/systemd/system/lights.service`
 

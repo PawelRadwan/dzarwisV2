@@ -1,0 +1,19 @@
+[Unit]
+Description=Panel WWW dzarwis (sterowanie swiatlami z telefonu)
+After=network.target
+# nie poddawaj sie przy restartach - po rozruchu siec/WAGO moga nie byc gotowe
+StartLimitIntervalSec=0
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/dzarwisV2/scripts
+ExecStart=/usr/bin/python3 /home/pi/dzarwisV2/scripts/web_panel.py
+# port 80 bez uprawnien roota
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

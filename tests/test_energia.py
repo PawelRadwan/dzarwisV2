@@ -177,6 +177,16 @@ class CollectorTest(unittest.TestCase):
             self.assertAlmostEqual(s['home_kwh'], d['home_kwh'], places=3)
             self.assertEqual(s['self_use_pct'], d['self_use_pct'])
 
+    def test_rows_without_pv_energy_not_in_day_balance(self):
+        # minuty zapisane przed wprowadzeniem bal_pv_wh (niepełne) nie mogą trafiać do bilansu dnia
+        self.store.add(int(local_ts(12, 0)), 3000, -2000, 1000, 5.0, 29700.0, 41000, 22740, 500.0, 900.0)
+        self.polls(local_ts(12, 30), -1000, 3)
+        d = self.col.snapshot()['today']
+        m = self.col.months()
+        self.assertAlmostEqual(d['import_kwh'], m['totals']['import_kwh'], places=3)
+        self.assertAlmostEqual(d['export_kwh'], m['totals']['export_kwh'], places=3)
+        self.assertAlmostEqual(d['import_kwh'], 0.0, places=3)
+
     def test_gap_not_integrated(self):
         self.polls(local_ts(12, 0), 36000, 1)
         self.polls(local_ts(12, 2), 36000, 1)                 # 120 s przerwy - nie doliczamy

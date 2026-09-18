@@ -120,7 +120,8 @@ class EnergyStore:
     def balanced_sum(self, start, end):
         # (pobór Wh, oddanie Wh, produkcja Wh) liczone moc x czas w przedziale
         row = self._query('SELECT COALESCE(SUM(bal_import_wh), 0), COALESCE(SUM(bal_export_wh), 0), '
-                          'COALESCE(SUM(bal_pv_wh), 0) FROM samples WHERE ts >= ? AND ts < ?', (start, end))[0]
+                          'COALESCE(SUM(bal_pv_wh), 0) FROM samples WHERE ts >= ? AND ts < ? '
+                          'AND bal_pv_wh IS NOT NULL', (start, end))[0]      # tylko minuty z kompletem energii
         return tuple(row)
 
     def month_rows(self):

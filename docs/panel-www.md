@@ -25,7 +25,7 @@ Strona otwiera się wtedy jak aplikacja, na pełnym ekranie, jako „Dżarwis”
 - **Moc na fazach** (L1–L3): zużycie domu i pobór/oddawanie z sieci na każdej fazie, napięcie i prąd. Falownik jest jednofazowy, na **L1** (`INVERTER_PHASE` w `energia.py`) — tam dom = sieć + produkcja, na L2/L3 dom = sieć.
 - **Wykres dnia** (00:00–24:00): produkcja — pomarańczowe pole, zużycie domu — niebieska linia. Dotknięcie / najechanie pokazuje godzinę i obie wartości. Przerwa w linii = brak danych (np. restart Pi).
 - **Bilans dnia:** produkcja / pobrano / oddano / zużycie domu [kWh], autokonsumpcja (jaka część produkcji została w domu). Wszystkie wartości za ten sam okres — od pierwszego odczytu po północy; jeśli dane zaczęły się później (np. po restarcie Pi bez wcześniejszych danych), obok tytułu jest „od HH:MM”, a produkcja w bilansie może być mniejsza niż w kafelku „Produkcja dziś” (ten jest zawsze od północy, z falownika).
-- **Łącznie od …** i **Miesiące** (od najnowszego): pobrano / oddano (zbilansowane), produkcja (różnica stanów licznika falownika), zużycie domu (= produkcja + pobrano − oddano), autokonsumpcja. Dane od 2026-09-18; pierwszy miesiąc oznaczony „od DD.MM”.
+- **Łącznie od …** i **Miesiące** (od najnowszego): pobrano / oddano (zbilansowane), produkcja (moc falownika × czas, tak jak pobór i oddanie), zużycie domu (= produkcja + pobrano − oddano), autokonsumpcja. Dane od 2026-09-18; pierwszy miesiąc oznaczony „od DD.MM”.
 - **Pobór i oddanie są zbilansowane po fazach** — jak licznik zakładu energetycznego (w Polsce zwykle sumuje fazy): co 5 s moc łączna z licznika × czas od poprzedniego odczytu, dodatnia → pobór, ujemna → oddanie (przerwy > 30 s pomijane). Licznik SDM630 liczy każdą fazę osobno — przy falowniku na L1 zawyża pobór i oddanie; jego stany są w karcie Falownik z dopiskiem „po fazach”. Dotyczy też bilansu dnia.
 - **Stringi PV** i **Falownik** (status, temperatura, częstotliwość, kody błędów, liczniki łączne).
 - Żółty pasek „Falownik nie odpowiada — w nocy to normalne”: falownik jest zasilany z paneli i w nocy się wyłącza. Produkcja = 0, reszta działa.
@@ -48,12 +48,12 @@ Bramka odrzuca odczyt dużych bloków rejestrów (licznik: >54, Growatt: >64), d
 Pompa ciepła (sterownik Quotek `192.168.1.31`) — wyłącznie przez narzędzie `kotek_rpi` ([pompa-ciepla.md](pompa-ciepla.md)).
 
 - **Paski:** czerwony — awaria sterownika (np. „Awaria: Presostaty lub PWR”) albo brak łączności; żółty — zegar sterownika różni się od czasu Pi o > 5 min (harmonogramy działają wg zegara sterownika).
-- **Kafelki:** stan, moc sprężarki [W], aktywny program.
+- **Kafelki:** stan, pobór mocy całej pompy [W], aktywny program.
 - **Ręczne grzanie** (domyślnie 1 h, 0,5–8 h): panel wgrywa program S z jednorazową akcją grzania (z datą) na najbliższą minutę **zegara sterownika**; temperatura z ustawień sterownika (powrót CO 35 °C). Licznik pokazuje „Start o … — za …”, potem „Grzeje — do końca …” (czas ze sterownika). Nie ma przycisku stop — `kotek` nie ma polecenia przerywającego grzanie.
 - **Same pompy obiegowe** (domyślnie 15 min, 1–120): Pompa CO / Pompa kolektora / Obie (`samepompy`), licznik odliczający, „Zatrzymaj pompy” (`samepompy 0 0`).
 - **Program:** wybór 1–4 (`wlaczprogram`, zmiana potwierdzana — sterownik przełącza z opóźnieniem kilku sekund).
 - **Harmonogram aktywnego programu** z linią „Teraz: …” (awaria / grzanie / pracujące pompy / spoczynek) i stanem każdego zadania na dziś: „✓ wykonano GG:MM” (z dziennika sterownika), „trwa”, „następne — za …”, „nie wykonano”; godziny wg zegara sterownika, przy przesunięciu z dopiskiem „u nas ok. GG:MM”. Opis zadań czytelny: „codziennie 03:30–06:00 grzanie…”.
-- Temperatury czujników (bieżąca, min–max 24 h), pompy i wejścia (PWR, HP/LP), grzanie CO/CWU wł./wył., ostatnie akcje (powtórzenia zwinięte, np. „×124”), energia sprężarki łącznie [kWh] (1000 impulsów = 1 kWh), zegar sterownika.
+- Temperatury czujników (bieżąca, min–max 24 h), pompy i wejścia (PWR, HP/LP), grzanie CO/CWU wł./wył., ostatnie akcje (powtórzenia zwinięte, np. „×124”), energia pompy ciepła łącznie [kWh] (1000 impulsów = 1 kWh), zegar sterownika.
 - **Pompa CWU** — podłączona do przekaźnika sprężarki, bez osobnego sterowania (do zmiany).
 
 Każda akcja wymaga potwierdzenia i trafia do dziennika (`journalctl -u web.service`). Stan „do kiedy” pomp i ręcznego grzania: `data/pompa-stan.json` (wspólny dla telefonów, przetrwa restart). Odczyt co 5 s tylko przy otwartej zakładce (w tle panel czyta sterownik co 5 s zawsze).

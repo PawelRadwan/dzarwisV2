@@ -143,6 +143,33 @@
   .string { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
   .string .w { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .string .d { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ctrl { display: grid; gap: 14px; margin-top: 10px; }
+  .ctrl-row { border-top: 1px solid var(--line); padding-top: 12px; }
+  .ctrl-row:first-child { border-top: 0; padding-top: 0; }
+  .ctrl-row h3 { margin: 0 0 8px; font-size: 15px; }
+  .ctrl-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .ctrl-line label { color: var(--muted); font-size: 14px; }
+  .ctrl input, .ctrl select {
+    font: inherit; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); min-width: 0;
+  }
+  .ctrl input { width: 76px; }
+  .btn {
+    font: inherit; font-weight: 650; padding: 10px 14px; border-radius: 12px; cursor: pointer;
+    border: 1.5px solid var(--accent); background: transparent; color: var(--accent); touch-action: manipulation;
+  }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.danger { border-color: var(--danger); color: var(--danger); }
+  .btn:disabled { opacity: .45; }
+  .countdown { margin-top: 8px; font-size: 14px; color: var(--muted); }
+  .countdown b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .countdown.on b { color: var(--pv); }
+  .note { font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .actions-list { margin: 10px 0 0; padding: 0; list-style: none; font-size: 14px; }
+  .actions-list li { padding: 5px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .actions-list li:first-child { border-top: 0; }
+  .actions-list small { color: var(--muted); }
+  .heat-offline .ctrl { opacity: .45; pointer-events: none; }
   .soon { padding: 48px 8px; text-align: center; color: var(--muted); }
   .soon strong { display: block; font-size: 18px; color: var(--text); margin-bottom: 6px; }
   [hidden] { display: none !important; }
@@ -214,7 +241,81 @@
     </div>
   </section>
   <section id="ogrzewanie" hidden>
-    <div class="soon"><strong>Ogrzewanie</strong>Wkrótce</div>
+    <div class="banner pv-banner" id="heat-banner" role="alert" hidden></div>
+    <div class="banner pv-banner warn" id="heat-clock" hidden></div>
+    <div class="stats">
+      <div class="stat"><span class="stat-label">Stan</span><span class="stat-value" id="h-state">–</span></div>
+      <div class="stat"><span class="stat-label">Sprężarka</span><span class="stat-value" id="h-power">–</span></div>
+      <div class="stat"><span class="stat-label">Program</span><span class="stat-value" id="h-program">–</span></div>
+      <div class="stat"><span class="stat-label">Taryfa</span><span class="stat-value" id="h-tariff">–</span></div>
+    </div>
+    <div class="card">
+      <h2>Sterowanie</h2>
+      <div class="ctrl">
+        <div class="ctrl-row">
+          <h3>Ręczne grzanie</h3>
+          <div class="ctrl-line">
+            <label for="h-hours">Czas [h]</label>
+            <input id="h-hours" type="number" inputmode="decimal" min="0.5" max="8" step="0.5" value="1">
+            <button class="btn primary" id="h-heat-btn" type="button">Włącz grzanie</button>
+          </div>
+          <div class="countdown" id="h-heat-cd"></div>
+        </div>
+        <div class="ctrl-row">
+          <h3>Same pompy obiegowe</h3>
+          <div class="ctrl-line">
+            <label for="h-minutes">Czas [min]</label>
+            <input id="h-minutes" type="number" inputmode="numeric" min="1" max="120" step="1" value="15">
+          </div>
+          <div class="ctrl-line" style="margin-top:8px">
+            <button class="btn" type="button" data-pumps="co">Pompa CO</button>
+            <button class="btn" type="button" data-pumps="kol">Pompa kolektora</button>
+            <button class="btn" type="button" data-pumps="both">Obie</button>
+            <button class="btn danger" id="h-pumps-stop" type="button" hidden>Zatrzymaj pompy</button>
+          </div>
+          <div class="countdown" id="h-pumps-cd"></div>
+        </div>
+        <div class="ctrl-row">
+          <h3>Program</h3>
+          <div class="ctrl-line">
+            <select id="h-prog-select" aria-label="Program"></select>
+            <button class="btn" id="h-prog-btn" type="button">Ustaw program</button>
+          </div>
+        </div>
+      </div>
+      <div class="note">Pompa CWU pracuje razem ze sprężarką (podłączona do jej przekaźnika).</div>
+    </div>
+    <div class="card">
+      <h2>Temperatury <span>24 h: min – max</span></h2>
+      <dl class="rows" id="h-temps"></dl>
+    </div>
+    <div class="card">
+      <h2>Pompy i wejścia</h2>
+      <dl class="rows">
+        <dt>Pompa CO</dt><dd id="h-p-co">–</dd>
+        <dt>Pompa kolektora</dt><dd id="h-p-kol">–</dd>
+        <dt>Zasilanie (PWR)</dt><dd id="h-s-pwr">–</dd>
+        <dt>Presostat HP / LP</dt><dd id="h-s-hplp">–</dd>
+        <dt>Grzanie CO / CWU</dt><dd id="h-cocwu">–</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h2 id="h-sched-title">Harmonogram</h2>
+      <ul class="actions-list" id="h-sched"></ul>
+    </div>
+    <div class="card">
+      <h2>Ostatnie akcje <span>czas sterownika</span></h2>
+      <ul class="actions-list" id="h-actions"></ul>
+    </div>
+    <div class="card">
+      <h2>Energia sprężarki</h2>
+      <dl class="rows">
+        <dt>Łącznie</dt><dd id="h-e-all">–</dd>
+        <dt>Taryfa niska</dt><dd id="h-e-low">–</dd>
+        <dt>Taryfa wysoka</dt><dd id="h-e-high">–</dd>
+        <dt>Zegar sterownika</dt><dd id="h-clock">–</dd>
+      </dl>
+    </div>
   </section>
 </main>
 
@@ -562,6 +663,149 @@
   svg.addEventListener('pointerleave', hideHover);
   window.addEventListener('resize', drawChart);
 
+  // --- Ogrzewanie (pompa ciepła) ---
+  var HEAT_POLL_MS = 5000;
+  var heat = null, heatAt = 0;     // ostatni stan i czas jego pobrania (ms), do odliczania
+  var heatSection = $('ogrzewanie');
+
+  function clockFmt(sec) {
+    sec = Math.max(0, Math.round(sec));
+    var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+  }
+  function bannerSet(el, text) { el.hidden = !text; el.textContent = text || ''; }
+
+  function heatApi(path, body, question) {
+    if (question && !confirm(question)) return;
+    heatSection.classList.add('heat-offline');
+    fetch(path, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.error); return d; }); })
+      .then(renderHeat)
+      .catch(function (e) { alert('Nie udało się: ' + e.message); })
+      .then(function () { heatSection.classList.remove('heat-offline'); });
+  }
+
+  function renderHeat(d) {
+    heat = d; heatAt = Date.now();
+    if (!d.ok) bannerSet($('heat-banner'), d.error);
+    else if (d.fault) bannerSet($('heat-banner'), 'Awaria: ' + d.fault);
+    else bannerSet($('heat-banner'), null);
+    heatSection.classList.toggle('heat-offline', !d.ok);
+    var diff = d.clock_diff_min;
+    bannerSet($('heat-clock'), diff != null && Math.abs(diff) > 5 ?
+      'Zegar sterownika ' + (diff < 0 ? 'spóźnia się' : 'śpieszy się') + ' o ' + Math.abs(diff) + ' min — harmonogramy działają wg niego' : null);
+    if (!d.state) return;
+
+    setText('h-state', d.state_text);
+    setVal('h-power', d.power_w == null ? null : num(d.power_w, 0), 'W');
+    setText('h-program', d.program.nr + (d.program.opis ? ' · ' + d.program.opis : ''));
+    setText('h-tariff', d.tariff);
+
+    var sel = $('h-prog-select');
+    if (!sel.dataset.touched) {
+      sel.textContent = '';
+      d.programs.forEach(function (p) {
+        var o = document.createElement('option');
+        o.value = p.nr; o.textContent = p.nr + ' · ' + p.opis;
+        if (p.nr === d.program.nr) o.selected = true;
+        sel.appendChild(o);
+      });
+    }
+
+    var temps = $('h-temps');
+    temps.textContent = '';
+    d.temps.forEach(function (t) {
+      var dt = document.createElement('dt'); dt.textContent = t.nazwa;
+      var dd = document.createElement('dd'); dd.textContent = num(t.t, 1) + ' °C';
+      var sm = document.createElement('small');
+      sm.textContent = ' ' + num(t.tmin, 1) + ' – ' + num(t.tmax, 1);
+      sm.style.cssText = 'font-weight:400;color:var(--muted)';
+      dd.appendChild(sm);
+      temps.appendChild(dt); temps.appendChild(dd);
+    });
+
+    var onoff = function (v) { return v ? 'pracuje' : 'stoi'; };
+    var io = function (v) { return v ? 'wł.' : 'wył.'; };
+    setText('h-p-co', onoff(d.pumps.co));
+    setText('h-p-kol', onoff(d.pumps.kol));
+    setText('h-s-pwr', io(d.sensors.pwr));
+    setText('h-s-hplp', io(d.sensors.hp) + ' / ' + io(d.sensors.lp));
+    setText('h-cocwu', io(d.co_on) + ' / ' + io(d.cwu_on));
+
+    setText('h-sched-title', 'Harmonogram programu ' + d.program.nr + (d.program.opis ? ' · ' + d.program.opis : ''));
+    var sched = $('h-sched');
+    sched.textContent = '';
+    var akcje = d.program.akcje || [];
+    if (!akcje.length) { var li0 = document.createElement('li'); li0.textContent = 'Brak akcji — program niczego nie uruchamia'; sched.appendChild(li0); }
+    akcje.forEach(function (a) { var li = document.createElement('li'); li.textContent = a; sched.appendChild(li); });
+
+    var acts = $('h-actions');
+    acts.textContent = '';
+    d.actions.forEach(function (a) {
+      var li = document.createElement('li');
+      li.textContent = a.data + ' ' + (a.ile > 1 ? a.od + '–' + a.do : a.od) + '  program ' + a.program + ', akcja ' + a.akcja;
+      if (a.ile > 1) { var sm = document.createElement('small'); sm.textContent = '  (×' + a.ile + ')'; li.appendChild(sm); }
+      acts.appendChild(li);
+    });
+
+    var e = d.energy_kwh;
+    var kwh = function (v) { return v == null ? null : num(v, 0) + ' kWh'; };
+    setText('h-e-all', kwh(e.razem)); setText('h-e-low', kwh(e.niska)); setText('h-e-high', kwh(e.wysoka));
+    setText('h-clock', d.clock ? d.clock.slice(0, 16) + (diff ? ' (' + (diff > 0 ? '+' : '−') + Math.abs(diff) + ' min)' : '') : null);
+    tickHeat();
+  }
+
+  function tickHeat() {
+    // liczniki odliczające co 1 s z ostatniego stanu
+    if (!heat || !heat.state) return;
+    var now = Date.now() / 1000, since = (Date.now() - heatAt) / 1000, m = heat.manual;
+    var cd = $('h-heat-cd'), text = '', on = false;
+    if (heat.heating_left_s > 0) { text = 'Grzeje — do końca <b>' + clockFmt(heat.heating_left_s - since) + '</b>'; on = true; }
+    else if (m.heating_start_ts && now < m.heating_start_ts) text = 'Start o ' + m.heating_start + ' (czas sterownika) — za <b>' + clockFmt(m.heating_start_ts - now) + '</b>';
+    else if (m.heating_until && now < m.heating_until) text = 'Zaplanowane grzanie do <b>' + clockFmt(m.heating_until - now) + '</b> — sterownik jeszcze nie grzeje' + (heat.fault ? ' (awaria)' : '');
+    cd.innerHTML = text;     // tylko liczby i stałe teksty
+    cd.classList.toggle('on', on);
+
+    var parts = [];
+    [['pumps_co_until', 'Pompa CO'], ['pumps_kol_until', 'Pompa kolektora']].forEach(function (p) {
+      if (m[p[0]] && now < m[p[0]]) parts.push(p[1] + ' — zostało <b>' + clockFmt(m[p[0]] - now) + '</b>');
+    });
+    $('h-pumps-cd').innerHTML = parts.join('<br>');
+    $('h-pumps-cd').classList.toggle('on', parts.length > 0);
+    $('h-pumps-stop').hidden = parts.length === 0;
+  }
+
+  function refreshHeat() {
+    return fetch('/api/heat', { cache: 'no-store' }).then(function (r) {
+      if (r.status === 503) return r.json().then(function (d) { bannerSet($('heat-banner'), d.error); });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json().then(renderHeat);
+    }).catch(function () { bannerSet($('heat-banner'), 'Brak połączenia z panelem'); });
+  }
+
+  $('h-heat-btn').addEventListener('click', function () {
+    var h = parseFloat(String($('h-hours').value).replace(',', '.'));
+    if (!(h >= 0.5 && h <= 8)) { alert('Czas grzania: 0,5–8 h'); return; }
+    heatApi('/api/heat/manual', { hours: h }, 'Włączyć ręczne grzanie na ' + num(h, h % 1 ? 1 : 0) + ' h?');
+  });
+  document.querySelectorAll('[data-pumps]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var min = parseInt($('h-minutes').value, 10);
+      if (!(min >= 1 && min <= 120)) { alert('Czas pomp: 1–120 min'); return; }
+      var which = b.dataset.pumps;
+      var body = { co_min: which === 'kol' ? 0 : min, kol_min: which === 'co' ? 0 : min };
+      heatApi('/api/heat/pumps', body, 'Uruchomić ' + b.textContent.toLowerCase() + ' na ' + min + ' min?');
+    });
+  });
+  $('h-pumps-stop').addEventListener('click', function () { heatApi('/api/heat/pumps/stop', {}, 'Zatrzymać pompy?'); });
+  $('h-prog-select').addEventListener('change', function () { this.dataset.touched = '1'; });
+  $('h-prog-btn').addEventListener('click', function () {
+    var sel = $('h-prog-select'), nr = parseInt(sel.value, 10);
+    heatApi('/api/heat/program', { program: nr }, 'Ustawić program ' + sel.options[sel.selectedIndex].textContent + '?');
+    delete sel.dataset.touched;
+  });
+
   // --- odświeżanie tylko widocznej zakładki, wstrzymane gdy karta jest w tle ---
   var timers = [];
   function every(fn, ms) { fn(); timers.push(setInterval(fn, ms)); }
@@ -572,6 +816,7 @@
     var tab = currentTab();
     if (tab === 'oswietlenie') every(refresh, POLL_MS);
     if (tab === 'pv') { every(refreshPv, PV_POLL_MS); every(refreshDay, DAY_POLL_MS); }
+    if (tab === 'ogrzewanie') { every(refreshHeat, HEAT_POLL_MS); timers.push(setInterval(tickHeat, 1000)); }
   }
   document.addEventListener('visibilitychange', schedule);
   schedule();

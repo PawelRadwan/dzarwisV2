@@ -100,9 +100,31 @@ def parse_sensors(xml):
     return out
 
 
+def _hhmm_add(hhmm, minutes):
+    t = datetime.datetime.strptime(hhmm, '%H:%M') + datetime.timedelta(minutes=minutes)
+    return t.strftime('%H:%M')
+
+
+def describe_action(line):
+    # akcja z czytajprogram w zrozumiałej postaci; nieznane typy bez zmian
+    line = re.sub(r'\s+', ' ', line).strip()
+    m = re.match(r'Grzanie (.+?) (\d\d:\d\d) pco= ?([\d.]+) zew=.*?czas= ?(-?\d+)min$', line)
+    if m:
+        dni, godz, pco, czas = m.group(1), m.group(2), m.group(3).replace('.', ','), int(m.group(4))
+        if czas < 0:            # czas ujemny: grzanie DO godziny akcji
+            return '%s %s–%s grzanie, powrót CO do %s °C' % (dni, _hhmm_add(godz, czas), godz, pco)
+        if czas > 0:
+            return '%s %s–%s grzanie, powrót CO do %s °C' % (dni, godz, _hhmm_add(godz, czas), pco)
+        return '%s od %s grzanie do temperatury, powrót CO %s °C' % (dni, godz, pco)
+    m = re.match(r'Pompy (.+?) (\d\d:\d\d) CZ\.KOL="(\d+)" CZ\.CO="(\d+)"$', line)
+    if m:
+        return '%s %s pompy: kolektor %s min, CO %s min' % m.groups()
+    return line
+
+
 def parse_program(text):
     opis = re.search(r'^Opis \.+ (.*)$', text, re.M)
-    akcje = [re.sub(r'\s+', ' ', a).strip() for a in re.findall(r'^AK\. \d+: (.*)$', text, re.M)]
+    akcje = [describe_action(a) for a in re.findall(r'^AK\. \d+: (.*)$', text, re.M)]
     return {'opis': opis.group(1).strip() if opis else '', 'akcje': akcje}
 
 

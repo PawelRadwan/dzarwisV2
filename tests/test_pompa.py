@@ -112,8 +112,21 @@ class ParseTest(unittest.TestCase):
     def test_program(self):
         p = pompa.parse_program(PROGRAM_4)
         self.assertEqual(p['opis'], '8h')
-        self.assertEqual(p['akcje'][0], 'Grzanie codziennie 06:00 pco= 24.0 zew= czas=-150min')
-        self.assertEqual(len(p['akcje']), 6)
+        self.assertEqual(p['akcje'], [
+            'codziennie 03:30–06:00 grzanie, powrót CO do 24,0 °C',      # czas ujemny: grzanie DO godziny akcji
+            'codziennie 06:10 pompy: kolektor 5 min, CO 5 min',
+            'codziennie 10:00–13:00 grzanie, powrót CO do 24,0 °C',
+            'codziennie 13:10 pompy: kolektor 5 min, CO 5 min',
+            'codziennie 22:00–00:30 grzanie, powrót CO do 24,0 °C',
+            'codziennie 00:40 pompy: kolektor 5 min, CO 5 min',
+        ])
+
+    def test_program_other_lines(self):
+        text = ('Opis ................. specjal 24\n'
+                'AK. 1: Grzanie codziennie 08:21 pco= 24.0 zew=      czas=  0min \n'
+                'AK. 2: Cos innego 12:00 x=1\n')
+        self.assertEqual(pompa.parse_program(text)['akcje'],
+                         ['codziennie od 08:21 grzanie do temperatury, powrót CO 24,0 °C', 'Cos innego 12:00 x=1'])
 
     def test_program_list(self):
         lst = pompa.parse_program_list(LISTA)

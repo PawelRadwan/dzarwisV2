@@ -41,6 +41,20 @@ sqlite3 ~/dzarwisV2/data/energia.db "SELECT datetime(ts,'unixepoch','localtime')
 
 Bramka odrzuca odczyt dużych bloków rejestrów (licznik: >54, Growatt: >64), dlatego zapytania są małe.
 
+## Zakładka Ogrzewanie
+
+Pompa ciepła (sterownik Quotek `192.168.1.31`) — wyłącznie przez narzędzie `kotek_rpi` ([pompa-ciepla.md](pompa-ciepla.md)).
+
+- **Paski:** czerwony — awaria sterownika (np. „Awaria: Presostaty lub PWR”) albo brak łączności; żółty — zegar sterownika różni się od czasu Pi o > 5 min (harmonogramy działają wg zegara sterownika).
+- **Kafelki:** stan, moc sprężarki [W], aktywny program, taryfa.
+- **Ręczne grzanie** (domyślnie 1 h, 0,5–8 h): panel wgrywa program S z jednorazową akcją grzania (z datą) na najbliższą minutę **zegara sterownika**; temperatura z ustawień sterownika (powrót CO 35 °C). Licznik pokazuje „Start o … — za …”, potem „Grzeje — do końca …” (czas ze sterownika). Nie ma przycisku stop — `kotek` nie ma polecenia przerywającego grzanie.
+- **Same pompy obiegowe** (domyślnie 15 min, 1–120): Pompa CO / Pompa kolektora / Obie (`samepompy`), licznik odliczający, „Zatrzymaj pompy” (`samepompy 0 0`).
+- **Program:** wybór 1–4 (`wlaczprogram`, zmiana potwierdzana — sterownik przełącza z opóźnieniem kilku sekund).
+- Temperatury czujników (bieżąca, min–max 24 h), pompy i wejścia (PWR, HP/LP), grzanie CO/CWU wł./wył., harmonogram aktywnego programu (czytelnie: „codziennie 03:30–06:00 grzanie…”), ostatnie akcje (powtórzenia zwinięte, np. „×124”), energia sprężarki [kWh] (1000 impulsów = 1 kWh), zegar sterownika.
+- **Pompa CWU** — podłączona do przekaźnika sprężarki, bez osobnego sterowania (do zmiany).
+
+Każda akcja wymaga potwierdzenia i trafia do dziennika (`journalctl -u web.service`). Stan „do kiedy” pomp i ręcznego grzania: `data/pompa-stan.json` (wspólny dla telefonów, przetrwa restart). Odczyt co 5 s tylko przy otwartej zakładce (w tle panel czyta sterownik co 5 s zawsze).
+
 ## Budowa
 
 ```
@@ -54,6 +68,7 @@ przyciski ścienne ──► WAGO ◄──Modbus TCP── lights_v2_.py (light
 |---|---|
 | `scripts/web_panel.py` | serwer HTTP (`http.server` z biblioteki standardowej) + obsługa Modbus |
 | `scripts/energia.py` | odczyt falownika i licznika, minutowa historia w SQLite, bilans dnia |
+| `scripts/pompa.py` | pompa ciepła przez `kotek_rpi`: odczyt, program, pompy, ręczne grzanie; tylko dozwolone polecenia |
 | `scripts/web/index.html` | cała strona: HTML, CSS i JS w jednym pliku, bez bibliotek z internetu |
 | `scripts/web/manifest.json`, `icon-192.png`, `icon-512.png` | ikona i nazwa na ekranie głównym telefonu |
 | `deploy/systemd/web.service` | usługa systemd |
@@ -71,6 +86,11 @@ Serwer wydaje tylko pliki z listy `STATIC` w `web_panel.py` — nic innego z dys
 | `POST /api/lights` | `{"id": "swiatlo kuchnia", "on": false}` | lista jak wyżej, już po zmianie |
 | `POST /api/lights/all-off` | — | lista jak wyżej |
 | `GET /api/pv` | — | stan na żywo: `now`, `today`, `phases`, `strings`, `inverter`, `totals`, `meter_ok`, `inverter_ok`; `503` do pierwszego odczytu |
+| `GET /api/heat` | — | stan pompy: `state`, `fault`, `power_w`, `temps`, `program`, `programs`, `actions`, `energy_kwh`, `clock_diff_min`, `manual` (liczniki) |
+| `POST /api/heat/program` | `{"program": 1..4}` | stan pompy |
+| `POST /api/heat/pumps` | `{"co_min": 0..120, "kol_min": 0..120}` | stan pompy |
+| `POST /api/heat/pumps/stop` | — | stan pompy |
+| `POST /api/heat/manual` | `{"hours": 0.5..8}` | stan pompy |
 | `GET /api/pv/day` | — | `{"date": "2026-09-18", "points": [[ts, pv_w, home_w], …]}` — dzisiejsze minuty |
 
 `on` to **docelowy stan**, nie „przełącz” — powtórzone żądanie niczego nie psuje, a zapis do WAGO jest wykonywany tylko wtedy, gdy stan się zmienia.

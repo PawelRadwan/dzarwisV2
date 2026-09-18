@@ -1,0 +1,105 @@
+<pompa CfgVer="1.0">
+<adres ip="192.168.1.31" maska="255.255.255.0" port="33311" />
+
+<mac uzyj="1" />
+
+<plytka typ="quotek1.0" />
+
+<ds1820 wysdokladnosc="1" />
+
+<pokretlo uzyj="1" kierunek="P" />
+
+<blokady termometry="0" />
+
+<tempzew usrednianie="1" opoznienie="0" />
+
+<presostaty lp="1" hp="1" />
+
+<wyjtaryfa numer="5" niska="1" />
+
+
+<taryfy postarcie="niska" />
+
+<statystyka czas="0:0" />
+
+<energia pomiar="1" />
+
+
+<termometry>
+   <termometr typ="DS1820" id="10EC1B5C02080050" funkcja="zco" opis="#1" port="1" blad="0.0"  />
+   <termometr typ="DS1820" id="100AFC5B020800C6" funkcja="pko" opis="#2" port="1" blad="0.0"  />
+   <termometr typ="DS1820" id="1017E75B020800DB" funkcja="par" opis="#3" port="1" blad="0.0"  />
+   <termometr typ="DS1820" id="10DB2A5C02080071" funkcja="zko" opis="#4" port="1" blad="0.0"  />
+   <termometr typ="DS1820" id="1096295C02080000" funkcja="pco" opis="#5" port="1" blad="0.0"  />
+</termometry>
+
+<czasy>
+   <czas funkcja="spr_nast" wartosc="2" jednostka="min"  />
+   <czas funkcja="pco_start" wartosc="10" jednostka="min"  />
+   <czas funkcja="pko_start" wartosc="10" jednostka="min"  />
+   <czas funkcja="pco_stop" wartosc="10" jednostka="min"  />
+   <czas funkcja="pko_stop" wartosc="10" jednostka="min"  />
+</czasy>
+
+<temperatury>
+   <temperatura funkcja="rco" wartosc="0.4"  />
+   <temperatura funkcja="zko" wartosc="-7.0"  />
+   <temperatura funkcja="par" wartosc="-8.1"  />
+   <temperatura funkcja="pco" wartosc="35.0"  />
+</temperatury>
+
+<wyjscia>
+   <wyjscie funkcja="pompaco" port="2" />
+   <wyjscie funkcja="pompako" port="3" />
+   <wyjscie funkcja="sprezarka" port="1" />
+   <wyjscie funkcja="stycznik" port="0" />
+   <wyjscie funkcja="zawor" port="0" />
+   <wyjscie funkcja="zapadka" port="16" />
+   <wyjscie funkcja="alarm" port="0" />
+   <wyjscie funkcja="grzco" port="0" />
+   <wyjscie funkcja="grzcwu" port="0" />
+   <wyjscie funkcja="pwm1" port="0" />
+   <wyjscie funkcja="pwm2" port="0" />
+</wyjscia>
+
+<termostaty>
+   <termostat temperatura="55.0" histereza="0.5" port="4" opis="bojler" stan_nad="0" />
+</termostaty>
+
+<usrednianie_temperatur>
+</usrednianie_temperatur>
+
+<regulacje>
+</regulacje>
+
+<programator>
+   <cykliczne okres="0" />
+   <grzaniestart cwu="0" co="1" />
+</programator>
+
+
+<temperaturystale>
+</temperaturystale>
+
+<temperaturyzmian>
+   <temperatura opis="" />
+   <temperatura opis="" />
+   <temperatura opis="" />
+   <temperatura opis="" />
+   <temperatura opis="" />
+   <temperatura opis="" />
+</temperaturyzmian>
+
+<wejsciaadc>
+</wejsciaadc>
+
+<manometry>
+</manometry>
+
+<regulacjenapiecia>
+</regulacjenapiecia>
+
+<odmrazanie />
+
+
+</pompa>

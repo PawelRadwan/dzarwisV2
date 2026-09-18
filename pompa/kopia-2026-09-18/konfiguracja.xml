@@ -1,0 +1,349 @@
+<pompa CfgVer="1.0">
+<!--
+IP adres i port do komunikacji UDP, jesli ip="0.0.0.0" to zostanie 
+zachowany adres juz zaprogramowany.
+-->
+<adres ip="192.168.1.31" maska="255.255.255.0" port="33311" />
+
+<!--
+ustawienia korzystania z MAC filtra w kontrolerze ("0" lub "1")
+-->
+<mac uzyj="1" />
+
+<!--
+typ plytki sterownika (typ = "kot" lub "quotek1.0" lub "qotekrA"), 
+jesli nie ustawione to typ plytki jest "kot" co oznacza pierwsza prototypowa plytke
+-->
+<plytka typ="quotek1.0" />
+
+<!--
+Wysoka dokladnosc termometrow DS1820 ("0" lub "1")
+-->
+<ds1820 wysdokladnosc="1" />
+
+<!--
+Pokretlo zamiast przyciskow gora dol 
+   "uzyj"     "0" | "1"
+   "kierunek" zmiana kierunku krecenia "L" | "P" 
+-->
+<pokretlo uzyj="1" kierunek="P" />
+
+<!--
+Blokady na starcie prezarki 
+   "termometry"   liczba cykli 700ms przez ktore termometry nie sa odczytywane.
+-->
+<blokady termometry="0" />
+
+<!--
+Temperatura zewnetrzna, usrednianie i opoznienie dla wyzwalania  
+programow, oba parametry podawane sa w godzinach  
+-->
+<tempzew usrednianie="1" opoznienie="0" />
+
+<!--
+Presostaty, aktywny (awaryjny) stan presostatow, "0" lub "1" 
+-->
+<presostaty lp="1" hp="1" />
+
+<!--
+konfiguracja wyjscia przelacznika taryfy, (numer=1-16, 0-nie aktywne) 
+stan wyjscia dla niskiej taryfu (niska=0,1) 
+-->
+<wyjtaryfa numer="5" niska="1" />
+
+
+<!--
+rozne konfiguracje taryfy, aktualnie tylko stan po starcie, jesli atrybut nie ustawiony, 
+starownik zapyta o taryfe po kazdym starcie, np: (postarcie=niska|wysoka)
+    <taryfy  postarcie="niska" />
+-->
+<taryfy postarcie="niska" />
+
+<!--
+czas podsumowania statystyki dobowej, godzina i minuta 
+-->
+<statystyka czas="0:0" />
+
+<!--
+pomiar energii, wlaczony "1", wylaczony "0".
+pomiar energii zlicza impulesy na wejsciu nr 7 zakladajac 1000 impulsow na 1kW/h
+-->
+<energia pomiar="1" />
+
+
+<termometry>
+   <!--
+   "id" 8 bajtow ROMu czyli ID czujnika
+   "funkcja"
+      brak - brak funkcji
+       pco - powrot C.O.
+       zco - zasilanie C.O.
+       zko - zasilanie z kolektora
+       pko - powrot do kolektora
+       par - parownik
+       zew - zewnatrz
+      wew1 - wewnatrz 1
+      wew2 - wewnatrz 2
+      trm1 - termostat 1
+      trm2 - termostat 2
+   "opis" cokolwiek, bedzie wyswietlane na kosoli UART, max 18 znakow
+   "port" numer portu 1|2|3 domyslnie 1. Port 1 czytany jest co 0.7s
+            pozostale porty co 1min
+   "typ"
+      DS1820  - Dallas DS1820 (mozliwe roszerzenie dokladnosci do 1/16 st.)
+      DS18B20 - Dallas DS18B20 (dokladniejszy jak DS1820)
+      ADC     - Z przetwornika ADC po przeliczeniu, port to numer wejscia.
+      LAN     - Temperatura dostarczona przez net. Nie zaimplementowane!
+   "blad" wartosc bledu dodawana do odczytu, od -10.0 do 10.0
+   -->
+
+   <termometr typ="DS1820" id="10EC1B5C02080050" funkcja="zco" opis="#1" port="1" blad="0.0"  />
+   <termometr typ="DS1820" id="100AFC5B020800C6" funkcja="pko" opis="#2" port="1" blad="0.0"  />
+   <termometr typ="DS1820" id="1017E75B020800DB" funkcja="par" opis="#3" port="1" blad="0.0"  />
+   <termometr typ="DS1820" id="10DB2A5C02080071" funkcja="zko" opis="#4" port="1" blad="0.0"  />
+   <termometr typ="DS1820" id="1096295C02080000" funkcja="pco" opis="#5" port="1" blad="0.0"  />
+</termometry>
+
+<czasy>
+   <!--
+   "funkcja"
+           brak - brak funkcji
+       spr_nast - nastepne uruch. sprez.
+      pco_start - pomopa C.O. przed startem
+      pko_start - pomopa kolektora przed startem
+       pco_stop - pomopa C.O. po wyl sprez.
+       pko_stop - pomopa kolektora po wyl sprez.
+   "wartosc" liczba calkowita, brak wartosci ("") to nieskonczonosc
+   "jednostka"
+      god - godziny
+      min - minuty
+      sek - sekundy
+   -->
+
+   <czas funkcja="spr_nast" wartosc="2" jednostka="min"  />
+   <czas funkcja="pco_start" wartosc="10" jednostka="min"  />
+   <czas funkcja="pko_start" wartosc="10" jednostka="min"  />
+   <czas funkcja="pco_stop" wartosc="10" jednostka="min"  />
+   <czas funkcja="pko_stop" wartosc="10" jednostka="min"  />
+</czasy>
+
+<temperatury>
+   <!--
+   "funkcja"
+      brak - brak funkcji
+       zko - min zas. z kolektora
+       par - min parowania
+       pco - max powr.C.O.
+       rco - min roznica C.O.
+   "wartosc" wartosc dziesietnie, np. -5.2
+   -->
+
+   <temperatura funkcja="rco" wartosc="0.4"  />
+   <temperatura funkcja="zko" wartosc="-7.0"  />
+   <temperatura funkcja="par" wartosc="-8.1"  />
+   <temperatura funkcja="pco" wartosc="35.0"  />
+</temperatury>
+
+<wyjscia>
+   <!--
+    przypisanie funkcji do wyjsc sterujacych.
+    brak przypisania to warotsci domyslne: CO port 1, Kol port 2, sprez port 3
+     "funkcja"
+          brak - brak funkcji
+       pompaco - pompa CO
+       pompako - pompa kolektora
+       sprezarka - sterowanie sprezarka
+       stycznik - sterowanie stycznikiem na wejsciu
+         zawor - zawor powrotu czynnika
+       zapadka - sterwoanie zapadka awarii presos.
+         alarm - wyjscie alarmu
+         grzco - grzanie CO
+        grzcwu - grzanie CWU
+          pwm1 - wyjscie PWM #1
+          pwm2 - wyjscie PWM #2
+     "port" numer portu, 1-8 triaki, 9-16 optostyczniki, 0 nie aktywne
+   -->
+
+   <wyjscie funkcja="pompaco" port="2" />
+   <wyjscie funkcja="pompako" port="3" />
+   <wyjscie funkcja="sprezarka" port="1" />
+   <wyjscie funkcja="stycznik" port="0" />
+   <wyjscie funkcja="zawor" port="0" />
+   <wyjscie funkcja="zapadka" port="16" />
+   <wyjscie funkcja="alarm" port="0" />
+   <wyjscie funkcja="grzco" port="0" />
+   <wyjscie funkcja="grzcwu" port="0" />
+   <wyjscie funkcja="pwm1" port="0" />
+   <wyjscie funkcja="pwm2" port="0" />
+</wyjscia>
+
+<termostaty>
+   <!--
+   Termostaty, maksymalnie 2. atrybuty: temperatura-temp.przelaczania,
+   histereza-histereza, port-wyjscie sterowane, stan_nad-stan wyjscia gdy 
+   temp.powyzej granicznej
+   Przyklad:
+     <termostat temperatura="20.0" histereza="3.0" port="2" opis="termostat1" stan_nad="0" />
+   
+   Temperatura graniczna moze byc zdefiniowana jako temperatura logiczna:
+     <termostat tempid="reg1" histereza="3.0" port="2" opis="termostat1" stan_nad="0" />
+   -->
+
+   <termostat temperatura="55.0" histereza="0.5" port="4" opis="bojler" stan_nad="0" />
+</termostaty>
+
+<usrednianie_temperatur>
+   <!--
+   Usrednianie temperatur. Wskazania termometrow sa zbierane co 15 min.
+   Zebrane dane z trzech dni moga sluzyc do obliczenia sredniej opoznionej.
+   Element <usrednianie /> powinien zawierac trzy atrybutu:
+    "termometr"   - numer czujnika temperatury, 1 do 12 
+    "usrednianie" - dlugosc liczenia srednie w godzinach
+    "opoznienie"  - opoznienie liczenia sredniej w godzinach
+    "zawsze"      - zawsze zwraca dobra wartosc, np. kiedy nie nazbierane 
+                      sa jeszcze wartosci dla okresu usredniania, zwraca 
+                      wtedy wskazanie ustawionego termometru, 1 lub 0 
+   Ten mechanizm jest identyczny jak zdefiniowany elementem <tempzew>  
+   umozliwia jednak usrednianie dowolnej temperatury
+   Przyklad:
+     <usrednianie termometr="2" usrednianie="1" opoznienie="1" />
+   -->
+
+</usrednianie_temperatur>
+
+<regulacje>
+   <!--
+   Temperatury nastawiane recznie. maksymalnie 8 pozycji
+    "min"    - temperatura minimalna 
+    "max"    - temperatura maxymalna
+    "opis"   - opis tekstowy
+    "wejscie"- sterowanie wejsciem 1..8, jak wejscie 0 to wartosc min
+                 jake wejscie 1 to wartosc max, nie ruluje sie recznie, 
+                 brak tego atrubutu to sterowanie reczne
+   Przyklad:
+     <regulacja min="23.3" max="34.0" opis="regulacja CWU" />
+   -->
+
+</regulacje>
+
+<programator>
+   <!--
+   Rozne ustawienia programatora. 
+   
+   Cykliczne akcje, czyli akcje, ktore wykonuja sie co okreslony okres czasu.
+    "okres"  - okres w minutach wykonywania akcji cyklicznych. od 1-60 min.
+               0 to wylaczenie akcji cyklicznych
+   -->
+   <cykliczne okres="0" />
+   <!--
+   Stan wlacznikow grzania CO i CWU na starcie systemu.
+    "cwu"   - stan grzania CWU
+    "co"    - stan grzania CO
+   -->
+   <grzaniestart cwu="0" co="1" />
+</programator>
+
+
+<temperaturystale>
+   <!--
+   Temperatury stale, do ogolnego stosowania. Maksymalnie 9 pozycji
+    "temp"   - temperatura  
+    "opis"   - opis tekstowy
+   Przyklad:
+     <stala temp="55.0" opis="t.graniczna CWU" />
+   -->
+
+</temperaturystale>
+
+<temperaturyzmian>
+   <!--
+   Obliczane temperatury zmiany innych temperatur. Maksymalnie 6 pozycji
+   Temperatury zmian sa liczone jako rozne operacje matematyczne na dwoch wartosciach
+   dowolnej temperatury w pewnym przedziale czasu. Definicja obliczen umieszczana jest 
+   w programie grzania. Tutaj definiujemy tylko opis
+    "opis"   - opis tekstowy
+   Przyklad:
+     <temperatura opis="wych.podlogi" />
+   -->
+
+   <temperatura opis="" />
+   <temperatura opis="" />
+   <temperatura opis="" />
+   <temperatura opis="" />
+   <temperatura opis="" />
+   <temperatura opis="" />
+</temperaturyzmian>
+
+<wejsciaadc>
+   <!--
+   Konfiguracje wejscia jako przetwornika AD (Analog-Digital Converter)
+   Wejscia ADC sa 10 bitowe, czyli od 0 do 1023. Wartosc 0 odpowiada 0V na 
+   wejsciu, a 1023 to napiecie rowne napieciu odniesienia czyli AVREF.
+   Wejscia ADC moga byc uzyte jako pomiar cisnienia badz temperatury. W tym
+   miekscu konfiguruje jak wartosc jest przeliczana, do czego zostaniw wykorzystana 
+   zalezy od konfiguracji termometrow i czujnikow cisnienia.
+       wartosc = mnoznik * <wartosc ADC> + offset
+   "numer" numer wejscia ADC - od 1 do 2 (sa to odpowiednio 4 i 8 wejscia 
+             na plytce, czyli porty P4.3 i P4.7 kontrolera)
+   "mnoznik" mnoznik (liczba z przecinkiem)
+   "offset" przesuniecie (liczba z przecinkiem)
+   Przyklad:
+     <wejscieadc numer="1" mnoznik="0.045" offset="-3.5" />
+   -->
+
+</wejsciaadc>
+
+<manometry>
+   <!--
+   Konfiguracje miernikow cisnienia (manometrow). Mierniki, jako prztworniki
+   cinienia na napiecie, powinny byc podlaczone doe wejsci ADC. Wejscia ADC 
+   nalezy tak skonfigurowac przy pomocy mnoznika i offsetu aby ich wartosc  
+   Odpowiaddala cisnieniu.
+   Prog to wartosc graniczna, sprawdzana podczas pracy pompy, prog jest 
+   dolny i gorny odpowiedni dla miernika niskiego cisnienia NC i wysokiego cisnienia WC
+   "typ" typ manometru:  NC, WC
+   "prog" wartosc progu z dokladnoscia do jednego miejsca po przecinku
+   "adc" numer wejsca analogowego
+   Przyklad:
+     <manometr typ="WC" prog="20.0" adc="1" />
+   -->
+
+</manometry>
+
+<regulacjenapiecia>
+   <!--
+   Regulacja napiecia. Kazde z wyjsc moze byc przystosowane do regulacji
+   napiecia. Sa dwie regulacje:
+       - fazowa, poprzez regulacje wypelnienia polowki sinusa
+       - grupowa, poprzez regulacje liczby wlaczonych pelnych okresow
+   Obie regulacje sa dostepne jednoczesnie dla wyjscia skonfigurowanego w tej czesci.
+   Zakres regulacji fazowej 1-10 gdzie 10 oznacza pelne napiecie. Regulacja fazowa 
+   jest ustawiona tak by skala 1-10 odpowiadala liniowo napieciu skutecznemu (katy zalaczenia
+   triakow nie sa liniowe. Regulacja grupowa, 1-10 to liczba pelnych okresow wlaczonych 
+   w przedizale czasu 0.2sek, czyli liczba wlaczonych okresow na czas 10 okresow.
+   Ustawienie regulacji odbywa sie na panelu badz z programu grzania. Jesli atrybut pamiec
+   jest ustawiony, to regulacje beda odtworzone po starcie sterownika., w przciwnych 
+   razie, obie regulacje sa ustawiane na 10.
+   Maksymalnie, mozna ustawic 4 regulacji napiec.
+   UWAGA - regulacja napiecia wymaga pdlaczenia ukladu detekcji przejscia przez zero w napieciu 230V AC!
+   "wyjscie" numer wyjscia do regulacji, 1-16
+   "pamiec" czy nastawiona regulacja ma byc zapamietana na trwale.
+   Przyklad:
+     <regulacjanapiecia wyjscie="2" pamiec="1" />
+   -->
+
+</regulacjenapiecia>
+
+<!--
+konfiguracja odmraznia, dla pompy powietrznej. Atrybuty elementu "odmrazanie": 
+   "czas"        czas cyklicznego odmrazania, niezależnie od detekcji zamrozenia
+   "tzezwolenia" temperatura zewnetrzna, ponizej ktorej wykonywane jest odmrazanie 
+   "tdetekcji"   roznice temperatury zewnetrzej a temp. par (freonu) jako detekcja 
+                   zamrozenia wymiennika
+   "tkonca"      temperatura  par (freonu) konca odmrazania 
+Odmrazanie jest aktywne, jesli "tzezwolenia" jest wieksza od zera 
+-->
+<odmrazanie />
+
+
+</pompa>

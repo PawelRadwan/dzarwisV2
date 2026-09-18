@@ -9,6 +9,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import dzarwis_global_vars as dgv
+import energia
 from lights_v2_ import ModbusError, MODBUS_TIMEOUT, read_registers
 from pyModbusTCP.client import ModbusClient
 
@@ -36,6 +37,8 @@ SWIATLA = [
 
 PORT = int(os.environ.get('DZARWIS_WEB_PORT', 80))
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web')
+# minutowe pomiary energii (poza repozytorium - .gitignore)
+ENERGY_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'energia.db')
 
 # jedyne pliki, które serwer wydaje: ścieżka URL -> (plik w WEB_DIR, typ)
 STATIC = {
@@ -110,7 +113,8 @@ class Panel:
         self._modbus(self._all_off)
 
 
-def make_handler(panel, web_dir):
+def make_handler(panel, web_dir, energy=None):
+    # energy: energia.Collector albo None (zakładka PV wyłączona)
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status, body, ctype):
             self.send_response(status)
@@ -136,9 +140,19 @@ def make_handler(panel, web_dir):
                 log.exception('nieobsłużony błąd')
                 self._json(500, {'error': 'Błąd serwera'})
 
+        def _pv(self, data):
+            if data is None:
+                self._json(503, {'error': 'Brak danych z licznika i falownika'})
+            else:
+                self._json(200, data)
+
         def do_GET(self):
             if self.path == '/api/lights':
                 self._api(lambda: None)
+            elif self.path == '/api/pv':
+                self._pv(energy.snapshot() if energy else None)
+            elif self.path == '/api/pv/day':
+                self._pv(energy.day() if energy else None)
             elif self.path in STATIC:
                 name, ctype = STATIC[self.path]
                 with open(os.path.join(web_dir, name), 'rb') as f:
@@ -182,8 +196,12 @@ def main():
     logging.basicConfig(level=logging.INFO, format='%(levelname)s %(message)s')
     mb = ModbusClient(host=dgv.PLC.ip, unit_id=dgv.PLC.uid, port=dgv.PLC.port,
                       auto_open=True, auto_close=False, timeout=MODBUS_TIMEOUT)
-    server = ThreadingHTTPServer(('', PORT), make_handler(Panel(mb), WEB_DIR))
-    log.info('panel WWW na porcie %s, WAGO %s:%s', PORT, dgv.PLC.ip, dgv.PLC.port)
+    gateway = ModbusClient(host=energia.GATEWAY_IP, port=energia.GATEWAY_PORT,
+                           auto_open=True, auto_close=False, timeout=energia.MODBUS_TIMEOUT)
+    collector = energia.Collector(gateway, energia.EnergyStore(ENERGY_DB))
+    collector.start()
+    server = ThreadingHTTPServer(('', PORT), make_handler(Panel(mb), WEB_DIR, collector))
+    log.info('panel WWW na porcie %s, WAGO %s:%s, energia %s', PORT, dgv.PLC.ip, dgv.PLC.port, energia.GATEWAY_IP)
     server.serve_forever()
 
 

@@ -194,5 +194,56 @@ class HttpTest(unittest.TestCase):
             self.assertEqual(self.request(path)[0], 404, path)
 
 
+class FakeCollector:
+    def __init__(self, snapshot):
+        self._snapshot = snapshot
+
+    def snapshot(self):
+        return self._snapshot
+
+    def day(self):
+        return {'date': '2026-09-18', 'points': [[1789725600, 3500.0, 400.0]]}
+
+
+class PvHttpTest(unittest.TestCase):
+    def start(self, energy):
+        handler = web_panel.make_handler(web_panel.Panel(FakeModbusClient()), web_panel.WEB_DIR, energy)
+        self.server = web_panel.ThreadingHTTPServer(('127.0.0.1', 0), handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.base = 'http://127.0.0.1:%d' % self.server.server_address[1]
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+    def get(self, path):
+        try:
+            with urllib.request.urlopen(self.base + path, timeout=5) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    def test_pv_snapshot(self):
+        self.start(FakeCollector({'meter_ok': True, 'now': {'pv_w': 3597.3}}))
+        status, data = self.get('/api/pv')
+        self.assertEqual(status, 200)
+        self.assertEqual(data['now']['pv_w'], 3597.3)
+
+    def test_pv_day(self):
+        self.start(FakeCollector({}))
+        status, data = self.get('/api/pv/day')
+        self.assertEqual(status, 200)
+        self.assertEqual(data['points'][0][1], 3500.0)
+
+    def test_pv_no_data_yet(self):
+        self.start(FakeCollector(None))
+        self.assertEqual(self.get('/api/pv')[0], 503)
+
+    def test_pv_disabled(self):
+        self.start(None)
+        self.assertEqual(self.get('/api/pv')[0], 503)
+        self.assertEqual(self.get('/api/pv/day')[0], 503)
+
+
 if __name__ == '__main__':
     unittest.main()

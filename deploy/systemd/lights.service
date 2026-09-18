@@ -1,0 +1,15 @@
+[Unit]
+Description=Autostart Lights Script
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/dzarwisV2/scripts
+ExecStart=/usr/bin/python3 /home/pi/dzarwisV2/scripts/lights_v2_.py
+Restart=always
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

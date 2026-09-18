@@ -1,0 +1,5 @@
+# Na produkcyjnym Pi zainstalowany jest tylko pyModbusTCP==0.2.0 (tylko lights_v2_.py). Reszta dla pozostałych skryptów.
+pyModbusTCP
+pika
+influxdb
+pymodbus<3

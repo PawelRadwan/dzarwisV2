@@ -245,5 +245,91 @@ class PvHttpTest(unittest.TestCase):
         self.assertEqual(self.get('/api/pv/day')[0], 503)
 
 
+class FakeHeatPump:
+    def __init__(self, snap):
+        self.snap = snap
+        self.calls = []
+        self.error = None
+
+    def snapshot(self):
+        return self.snap
+
+    def _do(self, name, *args):
+        self.calls.append((name,) + args)
+        if self.error:
+            raise self.error
+
+    def set_program(self, nr):
+        if not isinstance(nr, int) or isinstance(nr, bool) or not 1 <= nr <= 4:
+            raise ValueError('program musi być liczbą 1–4')
+        self._do('program', nr)
+
+    def pumps(self, co_min=0, kol_min=0):
+        self._do('pumps', co_min, kol_min)
+
+    def stop_pumps(self):
+        self._do('stop')
+
+    def manual_heating(self, hours):
+        self._do('manual', hours)
+
+
+class HeatHttpTest(unittest.TestCase):
+    def setUp(self):
+        self.hp = FakeHeatPump({'ok': True, 'state': 'AWARIA'})
+        handler = web_panel.make_handler(web_panel.Panel(FakeModbusClient()), web_panel.WEB_DIR, None, self.hp)
+        self.server = web_panel.ThreadingHTTPServer(('127.0.0.1', 0), handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.base = 'http://127.0.0.1:%d' % self.server.server_address[1]
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+    def req(self, path, body=None):
+        data = json.dumps(body).encode() if body is not None else (b'' if path != '/api/heat' else None)
+        r = urllib.request.Request(self.base + path, data=data, method='GET' if data is None else 'POST')
+        try:
+            with urllib.request.urlopen(r, timeout=5) as resp:
+                return resp.status, json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    def test_get(self):
+        self.assertEqual(self.req('/api/heat'), (200, {'ok': True, 'state': 'AWARIA'}))
+
+    def test_no_data_yet(self):
+        self.hp.snap = None
+        self.assertEqual(self.req('/api/heat')[0], 503)
+
+    def test_program(self):
+        self.assertEqual(self.req('/api/heat/program', {'program': 4})[0], 200)
+        self.assertEqual(self.hp.calls, [('program', 4)])
+        self.assertEqual(self.req('/api/heat/program', {'program': 9})[0], 400)
+        self.assertEqual(self.req('/api/heat/program', {'x': 1})[0], 400)
+
+    def test_pumps_and_stop(self):
+        self.assertEqual(self.req('/api/heat/pumps', {'co_min': 15, 'kol_min': 0})[0], 200)
+        self.assertEqual(self.req('/api/heat/pumps/stop')[0], 200)
+        self.assertEqual(self.hp.calls, [('pumps', 15, 0), ('stop',)])
+
+    def test_manual(self):
+        self.assertEqual(self.req('/api/heat/manual', {'hours': 1.5})[0], 200)
+        self.assertEqual(self.hp.calls, [('manual', 1.5)])
+
+    def test_controller_error(self):
+        import pompa
+        self.hp.error = pompa.KotekError('Brak powierdzenia')
+        status, data = self.req('/api/heat/pumps', {'co_min': 15, 'kol_min': 0})
+        self.assertEqual(status, 503)
+        self.assertIn('Brak', data['error'])
+
+    def test_bad_json(self):
+        r = urllib.request.Request(self.base + '/api/heat/manual', data=b'{zly', method='POST')
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(r, timeout=5)
+        self.assertEqual(cm.exception.code, 400)
+
+
 if __name__ == '__main__':
     unittest.main()

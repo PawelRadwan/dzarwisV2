@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import dzarwis_global_vars as dgv
 import energia
+import pompa
 from lights_v2_ import ModbusError, MODBUS_TIMEOUT, read_registers
 from pyModbusTCP.client import ModbusClient
 
@@ -50,6 +51,14 @@ STATIC = {
 }
 
 log = logging.getLogger('web')
+
+# polecenia dla pompy: ścieżka -> wywołanie z treścią JSON
+HEAT_ACTIONS = {
+    '/api/heat/program': lambda hp, r: hp.set_program(r['program']),
+    '/api/heat/pumps': lambda hp, r: hp.pumps(co_min=r.get('co_min', 0), kol_min=r.get('kol_min', 0)),
+    '/api/heat/pumps/stop': lambda hp, r: hp.stop_pumps(),
+    '/api/heat/manual': lambda hp, r: hp.manual_heating(r['hours']),
+}
 
 
 class Panel:
@@ -113,8 +122,8 @@ class Panel:
         self._modbus(self._all_off)
 
 
-def make_handler(panel, web_dir, energy=None):
-    # energy: energia.Collector albo None (zakładka PV wyłączona)
+def make_handler(panel, web_dir, energy=None, heat=None):
+    # energy: energia.Collector, heat: pompa.HeatPump; None = zakładka wyłączona
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status, body, ctype):
             self.send_response(status)
@@ -153,6 +162,8 @@ def make_handler(panel, web_dir, energy=None):
                 self._pv(energy.snapshot() if energy else None)
             elif self.path == '/api/pv/day':
                 self._pv(energy.day() if energy else None)
+            elif self.path == '/api/heat':
+                self._heat(None)
             elif self.path in STATIC:
                 name, ctype = STATIC[self.path]
                 with open(os.path.join(web_dir, name), 'rb') as f:
@@ -168,8 +179,39 @@ def make_handler(panel, web_dir, energy=None):
             elif self.path == '/api/lights/all-off':
                 log.info('%s: wyłącz wszystko', self.client_address[0])
                 self._api(panel.all_off)
+            elif self.path in HEAT_ACTIONS:
+                self._heat(raw)
             else:
                 self._json(404, {'error': 'Nie znaleziono'})
+
+        def _heat(self, raw):
+            # raw None = sam odczyt; inaczej polecenie dla pompy z HEAT_ACTIONS
+            if heat is None:
+                self._json(503, {'error': 'Obsługa pompy wyłączona'})
+                return
+            try:
+                if raw is not None:
+                    try:
+                        req = json.loads(raw.decode('utf-8')) if raw.strip() else {}
+                        if not isinstance(req, dict):
+                            raise ValueError
+                        HEAT_ACTIONS[self.path](heat, req)
+                    except (KeyError, TypeError, ValueError) as e:
+                        raise ValueError(str(e) if isinstance(e, ValueError) and str(e) else 'niepoprawne dane')
+                    log.info('%s: pompa %s %s', self.client_address[0], self.path, raw.decode('utf-8', 'replace'))
+                data = heat.snapshot()
+                if data is None:
+                    self._json(503, {'error': 'Czekam na pierwszy odczyt sterownika pompy'})
+                else:
+                    self._json(200, data)
+            except ValueError as e:
+                self._json(400, {'error': str(e)})
+            except pompa.KotekError as e:
+                log.error('pompa: %s', e)
+                self._json(503, {'error': 'Sterownik pompy: %s' % e})
+            except Exception:
+                log.exception('nieobsłużony błąd')
+                self._json(500, {'error': 'Błąd serwera'})
 
         def _set_light(self, raw):
             try:
@@ -200,7 +242,9 @@ def main():
                            auto_open=True, auto_close=False, timeout=energia.MODBUS_TIMEOUT)
     collector = energia.Collector(gateway, energia.EnergyStore(ENERGY_DB))
     collector.start()
-    server = ThreadingHTTPServer(('', PORT), make_handler(Panel(mb), WEB_DIR, collector))
+    heat = pompa.HeatPump(pompa.run_kotek, os.path.dirname(ENERGY_DB))
+    heat.start()
+    server = ThreadingHTTPServer(('', PORT), make_handler(Panel(mb), WEB_DIR, collector, heat))
     log.info('panel WWW na porcie %s, WAGO %s:%s, energia %s', PORT, dgv.PLC.ip, dgv.PLC.port, energia.GATEWAY_IP)
     server.serve_forever()
 

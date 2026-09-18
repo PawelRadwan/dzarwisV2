@@ -125,4 +125,4 @@ Pełny opis jest w komentarzu na początku każdego pliku z `czytajprogram -x` (
 - **Zegar sterownika** nie zmienia czasu na letni — 2026-09-18 spóźniał się ~1 h. Programy działają wg niego. Korekta: `ustrtc` (np. `ustrtc 3600`).
 - W XML ze `status` numer aktywnego programu jest liczony od zera (`aktywnyProgram nr="3"` = program 4); w tekście (`aktprogram`) — od jedynki.
 - `energia` podaje impulsy licznika; przelicznik na kWh zależy od stałej licznika (nieznana). Z logu: 2 h pracy sprężarki = 7563 impulsy.
-- Log sterownika ma 32 768 pozycji; `logi 8` 2026-09-18 zwracał najnowsze wpisy z 2025-11-10 — do sprawdzenia, czy log nadal się zapisuje.
+- **Log sterownika nie zapisuje się od 2025-11-10 13:06** (sprawdzone 2026-09-18: 400 najnowszych wpisów obejmuje 2025-09-08…2025-11-10, bufor pełny — 32 768 pozycji). `wykonaneakcje` działa normalnie. Historii pracy pompy od listopada 2025 nie ma w sterowniku — panel musi zbierać własną. Kasowanie logu jest tylko przez tryb symulacji (`symuon 3`) — nie próbowane.

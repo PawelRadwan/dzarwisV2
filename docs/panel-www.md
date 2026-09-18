@@ -46,12 +46,12 @@ Bramka odrzuca odczyt dużych bloków rejestrów (licznik: >54, Growatt: >64), d
 Pompa ciepła (sterownik Quotek `192.168.1.31`) — wyłącznie przez narzędzie `kotek_rpi` ([pompa-ciepla.md](pompa-ciepla.md)).
 
 - **Paski:** czerwony — awaria sterownika (np. „Awaria: Presostaty lub PWR”) albo brak łączności; żółty — zegar sterownika różni się od czasu Pi o > 5 min (harmonogramy działają wg zegara sterownika).
-- **Kafelki:** stan, moc sprężarki [W], aktywny program, taryfa.
+- **Kafelki:** stan, moc sprężarki [W], aktywny program.
 - **Ręczne grzanie** (domyślnie 1 h, 0,5–8 h): panel wgrywa program S z jednorazową akcją grzania (z datą) na najbliższą minutę **zegara sterownika**; temperatura z ustawień sterownika (powrót CO 35 °C). Licznik pokazuje „Start o … — za …”, potem „Grzeje — do końca …” (czas ze sterownika). Nie ma przycisku stop — `kotek` nie ma polecenia przerywającego grzanie.
 - **Same pompy obiegowe** (domyślnie 15 min, 1–120): Pompa CO / Pompa kolektora / Obie (`samepompy`), licznik odliczający, „Zatrzymaj pompy” (`samepompy 0 0`).
 - **Program:** wybór 1–4 (`wlaczprogram`, zmiana potwierdzana — sterownik przełącza z opóźnieniem kilku sekund).
 - **Harmonogram aktywnego programu** z linią „Teraz: …” (awaria / grzanie / pracujące pompy / spoczynek) i stanem każdego zadania na dziś: „✓ wykonano GG:MM” (z dziennika sterownika), „trwa”, „następne — za …”, „nie wykonano”; godziny wg zegara sterownika, przy przesunięciu z dopiskiem „u nas ok. GG:MM”. Opis zadań czytelny: „codziennie 03:30–06:00 grzanie…”.
-- Temperatury czujników (bieżąca, min–max 24 h), pompy i wejścia (PWR, HP/LP), grzanie CO/CWU wł./wył., ostatnie akcje (powtórzenia zwinięte, np. „×124”), energia sprężarki [kWh] (1000 impulsów = 1 kWh), zegar sterownika.
+- Temperatury czujników (bieżąca, min–max 24 h), pompy i wejścia (PWR, HP/LP), grzanie CO/CWU wł./wył., ostatnie akcje (powtórzenia zwinięte, np. „×124”), energia sprężarki łącznie [kWh] (1000 impulsów = 1 kWh), zegar sterownika.
 - **Pompa CWU** — podłączona do przekaźnika sprężarki, bez osobnego sterowania (do zmiany).
 
 Każda akcja wymaga potwierdzenia i trafia do dziennika (`journalctl -u web.service`). Stan „do kiedy” pomp i ręcznego grzania: `data/pompa-stan.json` (wspólny dla telefonów, przetrwa restart). Odczyt co 5 s tylko przy otwartej zakładce (w tle panel czyta sterownik co 5 s zawsze).

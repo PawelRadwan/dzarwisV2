@@ -102,7 +102,8 @@
   .pv-banner { display: block; }
   .pv-banner.warn { background: var(--warn-bg); color: var(--warn); }
   .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  @media (min-width: 700px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+  .stat.wide { grid-column: 1 / -1; }
+  @media (min-width: 700px) { .stats { grid-template-columns: repeat(4, 1fr); } .stat.wide { grid-column: auto; } }
   .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
   .stat-label { display: block; font-size: 14px; color: var(--muted); }
   .stat-value { display: block; margin-top: 6px; font-size: 26px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
@@ -254,8 +255,7 @@
     <div class="stats">
       <div class="stat"><span class="stat-label">Stan</span><span class="stat-value" id="h-state">–</span></div>
       <div class="stat"><span class="stat-label">Sprężarka</span><span class="stat-value" id="h-power">–</span></div>
-      <div class="stat"><span class="stat-label">Program</span><span class="stat-value" id="h-program">–</span></div>
-      <div class="stat"><span class="stat-label">Taryfa</span><span class="stat-value" id="h-tariff">–</span></div>
+      <div class="stat wide"><span class="stat-label">Program</span><span class="stat-value" id="h-program">–</span></div>
     </div>
     <div class="card">
       <h2>Sterowanie</h2>
@@ -320,8 +320,6 @@
       <h2>Energia sprężarki</h2>
       <dl class="rows">
         <dt>Łącznie</dt><dd id="h-e-all">–</dd>
-        <dt>Taryfa niska</dt><dd id="h-e-low">–</dd>
-        <dt>Taryfa wysoka</dt><dd id="h-e-high">–</dd>
         <dt>Zegar sterownika</dt><dd id="h-clock">–</dd>
       </dl>
     </div>
@@ -709,7 +707,6 @@
     setText('h-state', d.state_text);
     setVal('h-power', d.power_w == null ? null : num(d.power_w, 0), 'W');
     setText('h-program', d.program.nr + (d.program.opis ? ' · ' + d.program.opis : ''));
-    setText('h-tariff', d.tariff);
 
     var sel = $('h-prog-select');
     if (!sel.dataset.touched) {
@@ -759,6 +756,10 @@
       if (label) {
         var b = document.createElement('span'); b.className = 'badge ' + a.status; b.textContent = label; li.appendChild(b);
       }
+      if (a.tomorrow_in_min != null) {
+        var t = document.createElement('span'); t.className = 'badge next';
+        t.textContent = 'następne jutro — za ' + inTime(a.tomorrow_in_min); li.appendChild(t);
+      }
       if (a.status === 'done') li.className = 'done';
       sched.appendChild(li);
     });
@@ -774,7 +775,7 @@
 
     var e = d.energy_kwh;
     var kwh = function (v) { return v == null ? null : num(v, 0) + ' kWh'; };
-    setText('h-e-all', kwh(e.razem)); setText('h-e-low', kwh(e.niska)); setText('h-e-high', kwh(e.wysoka));
+    setText('h-e-all', kwh(e.razem));
     setText('h-clock', d.clock ? d.clock.slice(0, 16) + (diff ? ' (' + (diff > 0 ? '+' : '−') + Math.abs(diff) + ' min)' : '') : null);
     tickHeat();
   }

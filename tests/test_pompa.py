@@ -175,6 +175,18 @@ class ScheduleTest(unittest.TestCase):
         self.assertEqual(sch[5]['status'], 'later')
         self.assertEqual(sch[6]['status'], 'unknown')    # 00:40 - dziennik sterownika zaczyna się później
 
+    def test_program_changed_today_not_missed(self):
+        # program 3 wgrany po 10:00 - dziś nic nie wykonywał, więc 10:00 nie jest "nie wykonano"; następne jutro
+        items = pompa.parse_program('Opis ... x\nAK. 1: Pompy   codziennie 10:00 CZ.KOL="15" CZ.CO="15"\n')['items']
+        rows = [('09/18', '10:00', '4', '3'), ('09/18', '06:00', '4', '1')]
+        import datetime
+        now = datetime.datetime(2026, 9, 18, 13, 51, 44)
+        sch = pompa.build_schedule(items, rows, 3, now, -62)
+        self.assertEqual(sch[0]['status'], 'unknown')
+        self.assertEqual(sch[0]['tomorrow_in_min'], (24 * 60 - (13 * 60 + 51)) + 10 * 60 - 1)
+        self.assertEqual(pompa.build_schedule(items, rows + [('09/18', '11:00', '3', '9')], 3, now, 0)[0]['status'],
+                         'missed')
+
     def test_schedule_now(self):
         self.now += 7 * 60                                # zegar sterownika ~13:11 - w oknie pomp 13:10-13:15
         sch = {i['nr']: i for i in self.hp.snapshot()['schedule']}

@@ -152,7 +152,7 @@ def build_schedule(items, rows, program_nr, ctrl_now, diff_min):
             done.setdefault(akcja, czas)
     out = []
     for it in items:
-        e = dict(it, status='other', done_at=None, in_min=None, start_pi=None)
+        e = dict(it, status='other', done_at=None, in_min=None, start_pi=None, tomorrow_in_min=None)
         if it['start'] and diff_min and abs(diff_min) > 5:
             e['start_pi'] = _hhmm_add(it['start'], -diff_min)
         if it['daily'] and it['start']:
@@ -164,7 +164,9 @@ def build_schedule(items, rows, program_nr, ctrl_now, diff_min):
             elif str(it['nr']) in done and s <= cur:
                 e['status'], e['done_at'] = 'done', done[str(it['nr'])]
             elif s <= cur:
-                e['status'] = 'missed' if earliest is not None and earliest <= s else 'unknown'
+                # "nie wykonano" tylko gdy ten program był dziś aktywny (coś wykonał) przed godziną zadania
+                active_today = any(p == str(program_nr) and _minutes(c) <= cur for _, c, p, _a in today_rows)
+                e['status'] = 'missed' if active_today and earliest is not None and earliest <= s else 'unknown'
             else:
                 e['status'] = 'later'
                 e['in_min'] = int(s - cur)
@@ -172,6 +174,12 @@ def build_schedule(items, rows, program_nr, ctrl_now, diff_min):
     later = [e for e in out if e['status'] == 'later']
     if later:
         min(later, key=lambda e: e['in_min'])['status'] = 'next'
+    else:
+        # dziś już nic - najbliższe zadanie jutro
+        daily = [e for e in out if e['daily'] and e['start']]
+        if daily:
+            first = min(daily, key=lambda e: _minutes(e['start']))
+            first['tomorrow_in_min'] = int(24 * 60 - cur + _minutes(first['start']))
     return out
 
 

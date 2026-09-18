@@ -25,6 +25,11 @@
     --accent: #2563eb;
     --danger: #dc2626;
     --danger-bg: #fee2e2;
+    --warn-bg: #fef3c7;
+    --warn: #92400e;
+    --pv: #d97706;          /* produkcja - paleta sprawdzona walidatorem (jasny: #d97706/#2563eb) */
+    --home: #2563eb;        /* zużycie domu */
+    --grid-line: #eceef1;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -39,6 +44,11 @@
       --accent: #60a5fa;
       --danger: #f87171;
       --danger-bg: #3b1d1d;
+      --warn-bg: #3a2e12;
+      --warn: #fcd34d;
+      --pv: #c77f0a;        /* ciemny: #c77f0a/#3b82f6 na #22252c */
+      --home: #3b82f6;
+      --grid-line: #2c3038;
     }
   }
   * { box-sizing: border-box; }
@@ -89,6 +99,44 @@
     font: inherit; font-weight: 700; cursor: pointer; touch-action: manipulation;
   }
   .all-off:disabled { opacity: .4; }
+  .pv-banner { display: block; }
+  .pv-banner.warn { background: var(--warn-bg); color: var(--warn); }
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  @media (min-width: 700px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
+  .stat-label { display: block; font-size: 14px; color: var(--muted); }
+  .stat-value { display: block; margin-top: 6px; font-size: 26px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat-value small { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 3px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-top: 10px; }
+  .card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
+  .card h2 { margin: 0; font-size: 16px; }
+  .card h2 span { font-weight: 400; font-size: 14px; color: var(--muted); }
+  .legend { display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
+  .legend i { display: inline-block; vertical-align: middle; margin-right: 6px; }
+  .legend .k-pv { width: 12px; height: 10px; border-radius: 2px; background: var(--pv); }
+  .legend .k-home { width: 14px; height: 2px; background: var(--home); }
+  .chart { position: relative; margin-top: 10px; touch-action: pan-y; }
+  .chart svg { display: block; width: 100%; height: 200px; overflow: visible; }
+  .chart .axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .chart .gridline { stroke: var(--grid-line); stroke-width: 1; }
+  .chart .empty { fill: var(--muted); font-size: 13px; }
+  .tip {
+    position: absolute; top: 0; pointer-events: none; min-width: 128px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 7px 9px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.15);
+  }
+  .tip .t { color: var(--muted); margin-bottom: 3px; }
+  .tip .r { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .tip .r i { width: 12px; height: 2px; }
+  .tip .r b { font-variant-numeric: tabular-nums; }
+  .tip .r span { color: var(--muted); }
+  .rows { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; margin: 10px 0 0; }
+  .rows dt { color: var(--muted); }
+  .rows dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .strings { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
+  .string { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .string .w { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .string .d { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .soon { padding: 48px 8px; text-align: center; color: var(--muted); }
   .soon strong { display: block; font-size: 18px; color: var(--text); margin-bottom: 6px; }
   [hidden] { display: none !important; }
@@ -111,7 +159,48 @@
     <button class="all-off" id="all-off" type="button">Wyłącz wszystko</button>
   </section>
   <section id="pv" hidden>
-    <div class="soon"><strong>Fotowoltaika</strong>Wkrótce</div>
+    <div class="banner pv-banner" id="pv-banner" role="alert" hidden></div>
+    <div class="stats">
+      <div class="stat"><span class="stat-label">Produkcja teraz</span><span class="stat-value" id="pv-now">–</span></div>
+      <div class="stat"><span class="stat-label" id="grid-label">Sieć</span><span class="stat-value" id="grid-now">–</span></div>
+      <div class="stat"><span class="stat-label">Zużycie domu</span><span class="stat-value" id="home-now">–</span></div>
+      <div class="stat"><span class="stat-label">Produkcja dziś</span><span class="stat-value" id="pv-today">–</span></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Dziś</h2>
+        <div class="legend"><span><i class="k-pv"></i>Produkcja</span><span><i class="k-home"></i>Zużycie domu</span></div>
+      </div>
+      <div class="chart" id="chart">
+        <svg id="chart-svg" role="img" aria-label="Wykres produkcji i zużycia energii dzisiaj"></svg>
+        <div class="tip" id="chart-tip" hidden></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Bilans dnia <span id="since"></span></h2>
+      <dl class="rows">
+        <dt>Pobrano z sieci</dt><dd id="b-import">–</dd>
+        <dt>Oddano do sieci</dt><dd id="b-export">–</dd>
+        <dt>Zużycie domu</dt><dd id="b-home">–</dd>
+        <dt>Autokonsumpcja</dt><dd id="b-self">–</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h2>Stringi PV</h2>
+      <div class="strings" id="strings"></div>
+    </div>
+    <div class="card">
+      <h2>Falownik</h2>
+      <dl class="rows">
+        <dt>Status</dt><dd id="i-status">–</dd>
+        <dt>Temperatura</dt><dd id="i-temp">–</dd>
+        <dt>Częstotliwość sieci</dt><dd id="i-freq">–</dd>
+        <dt>Kody błędu / ostrzeżenia</dt><dd id="i-codes">–</dd>
+        <dt>Produkcja łącznie</dt><dd id="t-pv">–</dd>
+        <dt>Pobrano łącznie</dt><dd id="t-import">–</dd>
+        <dt>Oddano łącznie</dt><dd id="t-export">–</dd>
+      </dl>
+    </div>
   </section>
   <section id="ogrzewanie" hidden>
     <div class="soon"><strong>Ogrzewanie</strong>Wkrótce</div>
@@ -137,7 +226,6 @@
   var tiles = {};       // id -> element
   var state = {};       // id -> true/false
   var version = 0;      // rośnie przy każdej zmianie z tej strony; stare odpowiedzi odświeżania są odrzucane
-  var timer = null;
 
   // --- zakładki ---
   function showTab() {
@@ -148,8 +236,12 @@
       if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
     });
   }
-  window.addEventListener('hashchange', showTab);
+  window.addEventListener('hashchange', function () { showTab(); schedule(); });
   showTab();
+  function currentTab() {
+    var s = document.querySelector('main > section:not([hidden])');
+    return s ? s.id : 'oswietlenie';
+  }
 
   // --- komunikacja z serwerem ---
   function api(method, path, body) {
@@ -223,20 +315,236 @@
     change(null, api('POST', '/api/lights/all-off')).then(function () { allOff.disabled = false; });
   });
 
-  // --- odświeżanie co 2 s, wstrzymane gdy karta jest w tle ---
-  function start() {
-    if (timer) return;
-    refresh();
-    timer = setInterval(refresh, POLL_MS);
+  // --- PV ---
+  var PV_POLL_MS = 5000, DAY_POLL_MS = 60000;
+  var $ = function (id) { return document.getElementById(id); };
+  var pvBanner = $('pv-banner');
+  var dayData = null;
+
+  function num(v, digits) {
+    return v.toLocaleString('pl-PL', { minimumFractionDigits: digits, maximumFractionDigits: digits });
   }
-  function stop() {
-    clearInterval(timer);
-    timer = null;
+  function kw(w) { return w == null ? null : num(w / 1000, Math.abs(w) < 10000 ? 2 : 1); }
+  function setVal(id, value, unit) {
+    // duża wartość z jednostką; null -> kreska
+    var el = $(id);
+    el.textContent = value == null ? '–' : value;
+    if (value != null && unit) {
+      var u = document.createElement('small');
+      u.textContent = unit;
+      el.appendChild(u);
+    }
   }
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden) stop(); else start();
-  });
-  start();
+  function setText(id, text) { $(id).textContent = text == null ? '–' : text; }
+  function hhmm(ts) { var d = new Date(ts * 1000); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+
+  function showPvBanner(text, warn) {
+    pvBanner.hidden = !text;
+    pvBanner.textContent = text || '';
+    pvBanner.classList.toggle('warn', !!warn);
+  }
+
+  function renderPv(d) {
+    var n = d.now, t = d.today, inv = d.inverter, tot = d.totals;
+    if (!d.meter_ok) showPvBanner('Brak połączenia z licznikiem energii');
+    else if (!d.inverter_ok) showPvBanner('Falownik nie odpowiada — w nocy to normalne', true);
+    else showPvBanner(null);
+
+    setVal('pv-now', kw(n.pv_w), 'kW');
+    if (n.grid_w == null) { setText('grid-label', 'Sieć'); setVal('grid-now', null); }
+    else {
+      setText('grid-label', n.grid_w < 0 ? 'Oddawanie ↑' : 'Pobór ↓');
+      setVal('grid-now', kw(Math.abs(n.grid_w)), 'kW');
+    }
+    setVal('home-now', kw(n.home_w), 'kW');
+    setVal('pv-today', t.pv_kwh == null ? null : num(t.pv_kwh, 1), 'kWh');
+
+    var kwh = function (v) { return v == null ? null : num(v, 1) + ' kWh'; };
+    setText('b-import', kwh(t.import_kwh));
+    setText('b-export', kwh(t.export_kwh));
+    setText('b-home', kwh(t.home_kwh));
+    setText('b-self', t.self_use_pct == null ? null : t.self_use_pct + '%');
+    var midnight = new Date(); midnight.setHours(0, 5, 0, 0);
+    setText('since', t.since && t.since * 1000 > midnight.getTime() ? 'od ' + hhmm(t.since) : '');
+
+    var box = $('strings');
+    box.textContent = '';
+    if (!d.strings.length) {
+      var p = document.createElement('div');
+      p.className = 'd';
+      p.textContent = 'Brak danych z falownika';
+      box.appendChild(p);
+    }
+    d.strings.forEach(function (st, i) {
+      var el = document.createElement('div'); el.className = 'string';
+      var h = document.createElement('div'); h.className = 'd'; h.textContent = 'String ' + (i + 1);
+      var w = document.createElement('div'); w.className = 'w'; w.textContent = num(st.w / 1000, 2) + ' kW';
+      var dd = document.createElement('div'); dd.className = 'd'; dd.textContent = num(st.v, 1) + ' V · ' + num(st.a, 1) + ' A';
+      el.appendChild(h); el.appendChild(w); el.appendChild(dd);
+      box.appendChild(el);
+    });
+
+    setText('i-status', inv.status_text);
+    setText('i-temp', inv.temp_c == null ? null : num(inv.temp_c, 1) + ' °C');
+    setText('i-freq', inv.freq_hz == null ? null : num(inv.freq_hz, 2) + ' Hz');
+    setText('i-codes', inv.fault == null ? null : inv.fault + ' / ' + inv.warning);
+    var total = function (v) { return v == null ? null : num(v, 0) + ' kWh'; };
+    setText('t-pv', total(tot.pv_kwh));
+    setText('t-import', total(tot.import_kwh));
+    setText('t-export', total(tot.export_kwh));
+  }
+
+  function refreshPv() {
+    return fetch('/api/pv', { cache: 'no-store' }).then(function (r) {
+      if (r.status === 503) { showPvBanner('Czekam na pierwsze dane z licznika i falownika…', true); return; }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json().then(renderPv);
+    }).catch(function () { showPvBanner('Brak połączenia z panelem'); });
+  }
+
+  function refreshDay() {
+    return fetch('/api/pv/day', { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (d) { dayData = d; drawChart(); }).catch(function () {});
+  }
+
+  // --- wykres dnia: produkcja (pole) i zużycie domu (linia), jedna oś w kW ---
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var chartBox = $('chart'), svg = $('chart-svg'), tip = $('chart-tip');
+  var geo = null;   // bieżąca geometria wykresu dla warstwy hover
+
+  function el(name, attrs, parent) {
+    var e = document.createElementNS(SVG_NS, name);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function niceMax(v) {
+    var steps = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20];
+    for (var i = 0; i < steps.length; i++) if (v <= steps[i]) return steps[i];
+    return Math.ceil(v / 5) * 5;
+  }
+  function segments(points, idx) {
+    // odcinki bez przerw (luka > 3 min lub brak wartości przerywa linię)
+    var out = [], cur = [];
+    points.forEach(function (p, i) {
+      var gap = i > 0 && p[0] - points[i - 1][0] > 180;
+      if (p[idx] == null || gap) { if (cur.length) out.push(cur); cur = []; }
+      if (p[idx] != null) cur.push(p);
+    });
+    if (cur.length) out.push(cur);
+    return out;
+  }
+
+  function drawChart() {
+    if (!dayData) return;
+    var W = chartBox.clientWidth, H = 200, m = { l: 44, r: 6, t: 8, b: 22 };
+    if (!W) return;
+    var pw = W - m.l - m.r, ph = H - m.t - m.b;
+    var parts = dayData.date.split('-');
+    var day0 = new Date(+parts[0], +parts[1] - 1, +parts[2]).getTime() / 1000;
+    var pts = dayData.points;
+    var maxW = 0;
+    pts.forEach(function (p) { maxW = Math.max(maxW, p[1] || 0, p[2] || 0); });
+    var yMax = niceMax(maxW / 1000);
+    var x = function (ts) { return m.l + (ts - day0) / 86400 * pw; };
+    var y = function (w) { return m.t + ph - (w / 1000) / yMax * ph; };
+
+    svg.textContent = '';
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    var ticks = yMax <= 4 ? yMax : (yMax % 4 === 0 ? 4 : (yMax % 3 === 0 ? 3 : 5));
+    for (var i = 0; i <= ticks; i++) {
+      var v = yMax / ticks * i, yy = y(v * 1000);
+      el('line', { x1: m.l, x2: W - m.r, y1: yy, y2: yy, class: 'gridline' }, svg);
+      el('text', { x: m.l - 6, y: yy + 4, 'text-anchor': 'end', class: 'axis' }, svg).textContent = num(v, v % 1 ? 1 : 0) + (i === ticks ? ' kW' : '');
+    }
+    [0, 6, 12, 18, 24].forEach(function (h) {
+      el('text', { x: x(day0 + h * 3600), y: H - 4, 'text-anchor': h === 0 ? 'start' : h === 24 ? 'end' : 'middle', class: 'axis' }, svg)
+        .textContent = String(h).padStart(2, '0') + ':00';
+    });
+
+    if (!pts.length) {
+      el('text', { x: m.l + pw / 2, y: m.t + ph / 2, 'text-anchor': 'middle', class: 'empty' }, svg).textContent = 'Zbieram dane — wykres pojawi się za minutę';
+    }
+    segments(pts, 1).forEach(function (seg) {
+      var line = seg.map(function (p, i) { return (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ',' + y(p[1]).toFixed(1); }).join('');
+      var area = line + 'L' + x(seg[seg.length - 1][0]).toFixed(1) + ',' + y(0) + 'L' + x(seg[0][0]).toFixed(1) + ',' + y(0) + 'Z';
+      el('path', { d: area, fill: 'var(--pv)', 'fill-opacity': '0.22', stroke: 'none' }, svg);
+      el('path', { d: line, fill: 'none', stroke: 'var(--pv)', 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+    });
+    segments(pts, 2).forEach(function (seg) {
+      var line = seg.map(function (p, i) { return (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ',' + y(p[2]).toFixed(1); }).join('');
+      el('path', { d: line, fill: 'none', stroke: 'var(--home)', 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+    });
+
+    // warstwa hover: pionowa linia + znaczniki + dymek
+    var hover = el('g', { visibility: 'hidden' }, svg);
+    var cross = el('line', { y1: m.t, y2: m.t + ph, stroke: 'var(--muted)', 'stroke-width': 1 }, hover);
+    var dotPv = el('circle', { r: 4.5, fill: 'var(--pv)', stroke: 'var(--panel)', 'stroke-width': 2 }, hover);
+    var dotHome = el('circle', { r: 4.5, fill: 'var(--home)', stroke: 'var(--panel)', 'stroke-width': 2 }, hover);
+    geo = { x: x, y: y, m: m, pw: pw, W: W, day0: day0, pts: pts, hover: hover, cross: cross, dotPv: dotPv, dotHome: dotHome };
+    tip.hidden = true;
+  }
+
+  function tipRow(color, value, label) {
+    var r = document.createElement('div'); r.className = 'r';
+    var k = document.createElement('i'); k.style.background = color;
+    var b = document.createElement('b'); b.textContent = value;
+    var s = document.createElement('span'); s.textContent = label;
+    r.appendChild(k); r.appendChild(b); r.appendChild(s);
+    return r;
+  }
+
+  function onHover(ev) {
+    if (!geo || !geo.pts.length) return;
+    var rect = svg.getBoundingClientRect();
+    var px = (ev.clientX - rect.left) * geo.W / rect.width;
+    var ts = geo.day0 + (px - geo.m.l) / geo.pw * 86400;
+    var pts = geo.pts, lo = 0, hi = pts.length - 1;
+    while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (pts[mid][0] < ts) lo = mid; else hi = mid; }
+    var p = Math.abs(pts[lo][0] - ts) <= Math.abs(pts[hi][0] - ts) ? pts[lo] : pts[hi];
+    if (Math.abs(p[0] - ts) > 1800) { hideHover(); return; }
+    var cx = geo.x(p[0]);
+    geo.hover.setAttribute('visibility', 'visible');
+    geo.cross.setAttribute('x1', cx); geo.cross.setAttribute('x2', cx);
+    [[geo.dotPv, p[1]], [geo.dotHome, p[2]]].forEach(function (d) {
+      d[0].setAttribute('visibility', d[1] == null ? 'hidden' : 'visible');
+      if (d[1] != null) { d[0].setAttribute('cx', cx); d[0].setAttribute('cy', geo.y(d[1])); }
+    });
+    tip.textContent = '';
+    var t = document.createElement('div'); t.className = 't'; t.textContent = hhmm(p[0]);
+    tip.appendChild(t);
+    var pvColor = getComputedStyle(document.documentElement).getPropertyValue('--pv');
+    var homeColor = getComputedStyle(document.documentElement).getPropertyValue('--home');
+    tip.appendChild(tipRow(pvColor, p[1] == null ? '–' : kw(p[1]) + ' kW', 'Produkcja'));
+    tip.appendChild(tipRow(homeColor, p[2] == null ? '–' : kw(p[2]) + ' kW', 'Zużycie'));
+    tip.hidden = false;
+    var sx = cx * rect.width / geo.W, tw = tip.offsetWidth;
+    tip.style.left = (sx + 12 + tw > rect.width ? sx - 12 - tw : sx + 12) + 'px';
+  }
+  function hideHover() {
+    if (geo) geo.hover.setAttribute('visibility', 'hidden');
+    tip.hidden = true;
+  }
+  svg.addEventListener('pointermove', onHover);
+  svg.addEventListener('pointerdown', onHover);
+  svg.addEventListener('pointerleave', hideHover);
+  window.addEventListener('resize', drawChart);
+
+  // --- odświeżanie tylko widocznej zakładki, wstrzymane gdy karta jest w tle ---
+  var timers = [];
+  function every(fn, ms) { fn(); timers.push(setInterval(fn, ms)); }
+  function schedule() {
+    timers.forEach(clearInterval);
+    timers = [];
+    if (document.hidden) return;
+    var tab = currentTab();
+    if (tab === 'oswietlenie') every(refresh, POLL_MS);
+    if (tab === 'pv') { every(refreshPv, PV_POLL_MS); every(refreshDay, DAY_POLL_MS); }
+  }
+  document.addEventListener('visibilitychange', schedule);
+  schedule();
 })();
 </script>
 </body>

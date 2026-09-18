@@ -93,7 +93,11 @@ Odczyt: input registers (FC4) 3000–3049 oraz 3105–3106.
 | 3105 | kod błędu | – | `growat.Fault_code` |
 | 3106 | kod ostrzeżenia | – | `growat.Warning_code` |
 
+Panel WWW (`energia.py`) czyta dodatkowo: moc DC i stringi (3001–3010: U, I, P dla 2 stringów), moc AC 3023–3024, częstotliwość 3025 (×0,01 Hz), produkcję dziś 3049–3050 i łącznie 3051–3052 (×0,1 kWh), temperaturę 3093 (×0,1 °C). Pełna tabela: [specyfikacja zakładki PV](superpowers/specs/2026-09-18-panel-pv-design.md).
+
 ## Bramka 192.168.8.40 — licznik (unit id 3)
+
+Licznik to **Eastron SDM630** (układ rejestrów zgodny; potwierdzone odczytem 2026-09-18).
 
 Odczyt: input registers 0–19, liczby `float32`, big-endian (bajty i słowa).
 
@@ -102,5 +106,7 @@ Odczyt: input registers 0–19, liczby `float32`, big-endian (bajty i słowa).
 | 0–1, 2–3, 4–5 | napięcia V1, V2, V3 | `licznik.V1..V3` |
 | 6–7, 8–9, 10–11 | prądy I1, I2, I3 | dekodowane, **nie zapisywane** |
 | 12–13, 14–15, 16–17 | moce P1, P2, P3 | `licznik.P1..P3` |
+| 52–53 | moc łączna (ujemna = oddawanie) | panel WWW |
+| 72–73 / 74–75 | energia pobrana / oddana łącznie [kWh] | panel WWW |
 
-`bojler_ster.py` zakłada, że **ujemne P1 = oddawanie do sieci** (warunek `P1 < -2000`). Kierunek warto potwierdzić na liczniku.
+**Ujemna moc = oddawanie do sieci** — potwierdzone 2026-09-18 (falownik 3,6 kW, licznik −3,2 kW). `bojler_ster.py` korzysta z tej konwencji (`P1 < -2000`).

@@ -19,20 +19,44 @@ Strona do włączania i wyłączania świateł z telefonu.
 
 Strona otwiera się wtedy jak aplikacja, na pełnym ekranie, jako „Dżarwis”.
 
+## Zakładka PV
+
+- **Kafelki:** produkcja teraz, sieć („Oddawanie ↑” / „Pobór ↓”), zużycie domu (= produkcja + sieć), produkcja dziś.
+- **Wykres dnia** (00:00–24:00): produkcja — pomarańczowe pole, zużycie domu — niebieska linia. Dotknięcie / najechanie pokazuje godzinę i obie wartości. Przerwa w linii = brak danych (np. restart Pi).
+- **Bilans dnia:** pobrano / oddano / zużycie domu [kWh], autokonsumpcja (jaka część dzisiejszej produkcji została w domu). Pobór i oddanie liczone od pierwszego odczytu licznika po północy; jeśli dane zaczęły się później, obok tytułu jest „od HH:MM”.
+- **Stringi PV** i **Falownik** (status, temperatura, częstotliwość, kody błędów, liczniki łączne).
+- Żółty pasek „Falownik nie odpowiada — w nocy to normalne”: falownik jest zasilany z paneli i w nocy się wyłącza. Produkcja = 0, reszta działa.
+- Czerwony pasek „Brak połączenia z licznikiem energii”: bramka 192.168.8.40 lub licznik nie odpowiada.
+
+Dane odświeżają się co 5 s (wykres co minutę), tylko gdy zakładka PV jest otwarta. Szczegóły odczytu rejestrów i obliczeń: [superpowers/specs/2026-09-18-panel-pv-design.md](superpowers/specs/2026-09-18-panel-pv-design.md).
+
+### Zbieranie danych
+
+Wątek w `web_panel.py` (`scripts/energia.py`) co 5 s czyta falownik Growatt (unit 2) i licznik SDM630 (unit 3) przez bramkę `192.168.8.40`, niezależnie od tego, czy ktoś ogląda stronę. Co minutę zapisuje średnie do SQLite: `/home/pi/dzarwisV2/data/energia.db` (poza gitem, ok. 1440 wierszy na dobę). Podgląd bazy:
+
+```bash
+sqlite3 ~/dzarwisV2/data/energia.db "SELECT datetime(ts,'unixepoch','localtime'), pv_w, grid_w, home_w FROM samples ORDER BY ts DESC LIMIT 5"
+```
+
+Bramka odrzuca odczyt dużych bloków rejestrów (licznik: >54, Growatt: >64), dlatego zapytania są małe.
+
 ## Budowa
 
 ```
 telefon ──HTTP :80──► web_panel.py (web.service) ──Modbus TCP──► WAGO 192.168.8.5
+                           └─ energia.py (wątek) ──Modbus TCP──► bramka 192.168.8.40 (Growatt, SDM630)
+                                   └─► data/energia.db (SQLite)
 przyciski ścienne ──► WAGO ◄──Modbus TCP── lights_v2_.py (lights.service)
 ```
 
 | Plik | Rola |
 |---|---|
 | `scripts/web_panel.py` | serwer HTTP (`http.server` z biblioteki standardowej) + obsługa Modbus |
+| `scripts/energia.py` | odczyt falownika i licznika, minutowa historia w SQLite, bilans dnia |
 | `scripts/web/index.html` | cała strona: HTML, CSS i JS w jednym pliku, bez bibliotek z internetu |
 | `scripts/web/manifest.json`, `icon-192.png`, `icon-512.png` | ikona i nazwa na ekranie głównym telefonu |
 | `deploy/systemd/web.service` | usługa systemd |
-| `tests/test_web_panel.py` | testy na symulowanym WAGO |
+| `tests/test_web_panel.py`, `tests/test_energia.py` | testy na symulowanych urządzeniach (rejestry odczytane z prawdziwych) |
 
 Panel to osobny proces — jego awaria nie wpływa na przyciski ścienne. Korzysta z `read_registers` i `ModbusError` z `lights_v2_.py`. Ma jedno połączenie Modbus, współdzielone przez wątki pod blokadą; po błędzie zamyka je i otwiera przy następnym żądaniu.
 
@@ -45,6 +69,8 @@ Serwer wydaje tylko pliki z listy `STATIC` w `web_panel.py` — nic innego z dys
 | `GET /api/lights` | — | `{"lights": [{"id": "swiatlo kuchnia", "label": "Kuchnia", "on": true}, …]}` |
 | `POST /api/lights` | `{"id": "swiatlo kuchnia", "on": false}` | lista jak wyżej, już po zmianie |
 | `POST /api/lights/all-off` | — | lista jak wyżej |
+| `GET /api/pv` | — | stan na żywo: `now`, `today`, `strings`, `inverter`, `totals`, `meter_ok`, `inverter_ok`; `503` do pierwszego odczytu |
+| `GET /api/pv/day` | — | `{"date": "2026-09-18", "points": [[ts, pv_w, home_w], …]}` — dzisiejsze minuty |
 
 `on` to **docelowy stan**, nie „przełącz” — powtórzone żądanie niczego nie psuje, a zapis do WAGO jest wykonywany tylko wtedy, gdy stan się zmienia.
 

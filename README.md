@@ -22,6 +22,7 @@ flowchart LR
     MQ --> COMM
     GW[Bramka Modbus<br/>192.168.8.40] --- GRO[Growatt uid 2]
     GW --- MET[Licznik uid 3]
+    WEB <-->|Modbus TCP| GW
     POWER <-->|Modbus TCP| GW
     POWER --> DB
     DB --> BOJ
@@ -32,7 +33,7 @@ flowchart LR
 | Plik | Rola | Status |
 |---|---|---|
 | `scripts/lights_v2_.py` | Obsługa przycisków: zbocze opadające na wejściu WAGO przełącza przypisaną lampę | **produkcyjny** — usługa `lights.service` na Pi |
-| `scripts/web_panel.py` + `scripts/web/` | Panel WWW na telefon: włączanie/wyłączanie świateł, http://192.168.8.18/ | **produkcyjny** — usługa `web.service` na Pi |
+| `scripts/web_panel.py` + `scripts/energia.py` + `scripts/web/` | Panel WWW na telefon: światła i PV (produkcja, sieć, zużycie, wykres dnia), http://192.168.8.18/ | **produkcyjny** — usługa `web.service` na Pi |
 | `scripts/wago_750_comunication.py` | Sterowanie wyjściami WAGO poleceniami JSON z kolejki RabbitMQ | nieuruchomiony na Pi (wymaga Pythona ≥ 3.9) |
 | `scripts/read_power.py` | Co 10 s odczyt Growatta i licznika, zapis do InfluxDB | nieuruchomiony na Pi |
 | `scripts/bojler_ster.py` | Logika grzania bojlera (taryfa, nadwyżka PV) — **tylko wypisuje decyzje** | niedokończony |

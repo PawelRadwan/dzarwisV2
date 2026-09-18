@@ -56,12 +56,12 @@ web_panel.py (web.service)
 - `home_w = pv_w + grid_w` (grid ujemne przy oddawaniu).
 - Falownik nie odpowiada, licznik tak → `inverter_ok = false`, `pv_w = 0`, status „Nie odpowiada” (w nocy normalne), bez czerwonego paska.
 - Licznik nie odpowiada → `meter_ok = false`, pasek „Brak połączenia z licznikiem energii”; wartości sieci/domu = `null`.
-- Bilans dnia (doba wg czasu lokalnego Pi):
-  - `import_today = import_now − import` z pierwszej próbki doby (`since` = czas tej próbki);
-  - `export_today` analogicznie;
-  - `pv_today` = produkcja dziś z falownika, a gdy nie odpowiada — ostatnia zapisana dziś wartość, inaczej 0;
-  - `home_today = pv_today + import_today − export_today`;
-  - `self_use_pct = (pv_today − export_today) / pv_today × 100` (gdy `pv_today > 0`, obcięte do 0–100).
+- Bilans dnia (doba wg czasu lokalnego Pi) — **wszystkie wartości za ten sam okres**, od pierwszej próbki doby (`since`):
+  - `pv_today` (kafelek „Produkcja dziś”) = produkcja dziś z falownika, a gdy nie odpowiada — ostatnia zapisana dziś wartość, inaczej 0;
+  - `balance_pv = pv_today − pv_today w chwili since` (0, gdy falownik wtedy spał) — ważne, gdy zbieranie ruszyło w ciągu dnia;
+  - `import = import_now − import w chwili since`, `export` analogicznie;
+  - `home = balance_pv + import − export`;
+  - `self_use_pct = (balance_pv − export) / balance_pv × 100` (gdy `balance_pv > 0`, obcięte do 0–100).
 - Błąd zapisu do bazy jest logowany i nie zatrzymuje odczytów na żywo.
 
 ## API
@@ -73,7 +73,7 @@ web_panel.py (web.service)
   "updated": 1789727000,
   "meter_ok": true, "inverter_ok": true,
   "now": {"pv_w": 3597.3, "grid_w": -3222.4, "home_w": 374.9},
-  "today": {"pv_kwh": 11.8, "import_kwh": 1.2, "export_kwh": 8.1, "home_kwh": 4.9, "self_use_pct": 31, "since": 1789682400},
+  "today": {"pv_kwh": 11.8, "balance_pv_kwh": 11.8, "import_kwh": 1.2, "export_kwh": 8.1, "home_kwh": 4.9, "self_use_pct": 31, "since": 1789682400},
   "strings": [{"w": 1351.6, "v": 249.9, "a": 5.4}, {"w": 2295.0, "v": 424.6, "a": 5.4}],
   "inverter": {"status": 1, "status_text": "Praca", "temp_c": 46.9, "freq_hz": 50.01, "fault": 0, "warning": 0},
   "totals": {"pv_kwh": 29708.6, "import_kwh": 41051.8, "export_kwh": 22750.2}

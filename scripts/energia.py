@@ -114,7 +114,8 @@ class EnergyStore:
             'SELECT ts, pv_w, home_w FROM samples WHERE ts >= ? AND ts < ? ORDER BY ts', (start, end))]
 
     def first_meter_sample(self, start, end):
-        rows = self._query('SELECT ts, import_kwh, export_kwh FROM samples WHERE ts >= ? AND ts < ? '
+        # (ts, import_kwh, export_kwh, pv_today_kwh) - początek okresu bilansu dnia
+        rows = self._query('SELECT ts, import_kwh, export_kwh, pv_today_kwh FROM samples WHERE ts >= ? AND ts < ? '
                            'AND import_kwh IS NOT NULL ORDER BY ts LIMIT 1', (start, end))
         return tuple(rows[0]) if rows else None
 
@@ -137,7 +138,7 @@ class Collector:
         self.lock = threading.Lock()
         self.latest = None
         self._bucket = None         # bieżąca minuta: {'ts', 'pv', 'grid', 'home', 'last'}
-        self._first = None          # (początek doby, ts, import_kwh, export_kwh) - pierwszy odczyt licznika w dobie
+        self._first = None          # (początek doby, ts, import_kwh, export_kwh, pv_today_kwh) - pierwszy odczyt w dobie
         self._pv_today = None       # (początek doby, kWh)
         self._inverter_ok = None
 
@@ -194,17 +195,22 @@ class Collector:
 
         if m and (self._first is None or self._first[0] != day_start):
             first = self._store_call(self.store.first_meter_sample, day_start, day_end)
-            self._first = (day_start,) + (first if first else (int(now), m['import_kwh'], m['export_kwh']))
+            self._first = (day_start,) + (first if first else
+                                          (int(now), m['import_kwh'], m['export_kwh'], g['today_kwh'] if g else None))
 
-        today = {'pv_kwh': pv_today, 'import_kwh': None, 'export_kwh': None, 'home_kwh': None,
-                 'self_use_pct': None, 'since': None}
+        # bilans liczony za ten sam okres dla wszystkich wartości: od pierwszego odczytu w dobie (since);
+        # produkcja w bilansie = produkcja dziś minus produkcja dziś w chwili since (gdy zbieranie ruszyło w dzień)
+        today = {'pv_kwh': pv_today, 'balance_pv_kwh': None, 'import_kwh': None, 'export_kwh': None,
+                 'home_kwh': None, 'self_use_pct': None, 'since': None}
         if m:
+            pv_base = self._first[4] or 0.0
+            bal_pv = round(max(pv_today - pv_base, 0), 2)
             imp = round(max(m['import_kwh'] - self._first[2], 0), 2)
             exp = round(max(m['export_kwh'] - self._first[3], 0), 2)
-            today.update(import_kwh=imp, export_kwh=exp, home_kwh=round(pv_today + imp - exp, 2),
-                         since=self._first[1])
-            if pv_today > 0:
-                today['self_use_pct'] = round(min(max((pv_today - exp) / pv_today * 100, 0), 100))
+            today.update(balance_pv_kwh=bal_pv, import_kwh=imp, export_kwh=exp,
+                         home_kwh=round(max(bal_pv + imp - exp, 0), 2), since=self._first[1])
+            if bal_pv > 0:
+                today['self_use_pct'] = round(min(max((bal_pv - exp) / bal_pv * 100, 0), 100))
 
         snapshot = {
             'updated': int(now),

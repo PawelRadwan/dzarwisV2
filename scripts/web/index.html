@@ -179,6 +179,7 @@
     <div class="card">
       <h2>Bilans dnia <span id="since"></span></h2>
       <dl class="rows">
+        <dt>Produkcja</dt><dd id="b-pv">–</dd>
         <dt>Pobrano z sieci</dt><dd id="b-import">–</dd>
         <dt>Oddano do sieci</dt><dd id="b-export">–</dd>
         <dt>Zużycie domu</dt><dd id="b-home">–</dd>
@@ -360,6 +361,7 @@
     setVal('pv-today', t.pv_kwh == null ? null : num(t.pv_kwh, 1), 'kWh');
 
     var kwh = function (v) { return v == null ? null : num(v, 1) + ' kWh'; };
+    setText('b-pv', kwh(t.balance_pv_kwh));
     setText('b-import', kwh(t.import_kwh));
     setText('b-export', kwh(t.export_kwh));
     setText('b-home', kwh(t.home_kwh));

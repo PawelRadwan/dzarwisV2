@@ -23,7 +23,7 @@ Strona otwiera się wtedy jak aplikacja, na pełnym ekranie, jako „Dżarwis”
 
 - **Kafelki:** produkcja teraz, sieć („Oddawanie ↑” / „Pobór ↓”), zużycie domu (= produkcja + sieć), produkcja dziś.
 - **Wykres dnia** (00:00–24:00): produkcja — pomarańczowe pole, zużycie domu — niebieska linia. Dotknięcie / najechanie pokazuje godzinę i obie wartości. Przerwa w linii = brak danych (np. restart Pi).
-- **Bilans dnia:** pobrano / oddano / zużycie domu [kWh], autokonsumpcja (jaka część dzisiejszej produkcji została w domu). Pobór i oddanie liczone od pierwszego odczytu licznika po północy; jeśli dane zaczęły się później, obok tytułu jest „od HH:MM”.
+- **Bilans dnia:** produkcja / pobrano / oddano / zużycie domu [kWh], autokonsumpcja (jaka część produkcji została w domu). Wszystkie wartości za ten sam okres — od pierwszego odczytu po północy; jeśli dane zaczęły się później (np. po restarcie Pi bez wcześniejszych danych), obok tytułu jest „od HH:MM”, a produkcja w bilansie może być mniejsza niż w kafelku „Produkcja dziś” (ten jest zawsze od północy, z falownika).
 - **Stringi PV** i **Falownik** (status, temperatura, częstotliwość, kody błędów, liczniki łączne).
 - Żółty pasek „Falownik nie odpowiada — w nocy to normalne”: falownik jest zasilany z paneli i w nocy się wyłącza. Produkcja = 0, reszta działa.
 - Czerwony pasek „Brak połączenia z licznikiem energii”: bramka 192.168.8.40 lub licznik nie odpowiada.

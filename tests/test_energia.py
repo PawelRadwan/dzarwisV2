@@ -114,9 +114,14 @@ class CollectorTest(unittest.TestCase):
         self.now = local_ts(12, 50)
         self.col = energia.Collector(self.gw, self.store, clock=lambda: self.now)
 
+    def set_pv_today(self, kwh):
+        v = int(round(kwh * 10))
+        self.gw.regs[2][3049], self.gw.regs[2][3050] = v >> 16, v & 0xffff
+
     def set_meter(self, grid_w, import_kwh, export_kwh):
-        self.gw.load(GROWATT_3000, GROWATT_3093, GROWATT_3105, METER_0,
-                     f32_regs(grid_w), f32_regs(import_kwh) + f32_regs(export_kwh))
+        for base, block in ((52, f32_regs(grid_w)), (72, f32_regs(import_kwh) + f32_regs(export_kwh))):
+            for i, v in enumerate(block):
+                self.gw.regs[3][base + i] = v
 
     def test_no_data_before_first_poll(self):
         self.assertIsNone(self.col.snapshot())
@@ -134,12 +139,15 @@ class CollectorTest(unittest.TestCase):
 
     def test_day_balance(self):
         self.now = local_ts(0, 0, 30)
+        self.set_pv_today(0)
         self.set_meter(300, 41000.0, 22740.0)
         self.col.poll()
         self.now = local_ts(12, 50)
+        self.set_pv_today(12.3)
         self.set_meter(-3000, 41002.5, 22748.0)
         self.col.poll()
         t = self.col.snapshot()['today']
+        self.assertAlmostEqual(t['balance_pv_kwh'], 12.3)
         self.assertAlmostEqual(t['import_kwh'], 2.5, places=2)
         self.assertAlmostEqual(t['export_kwh'], 8.0, places=2)
         self.assertAlmostEqual(t['pv_kwh'], 12.3)
@@ -160,6 +168,26 @@ class CollectorTest(unittest.TestCase):
         t = col2.snapshot()['today']
         self.assertAlmostEqual(t['import_kwh'], 1.0, places=2)
         self.assertEqual(t['since'], int(local_ts(6, 0)))
+
+    def test_started_mid_day_balance_covers_same_period(self):
+        # start zbierania o 13:10 - produkcja od północy (12.8) nie może trafić do bilansu od 13:10
+        self.now = local_ts(13, 10)
+        self.set_pv_today(12.8)
+        self.set_meter(-3000, 41000.0, 22740.0)
+        self.col.poll()
+        t = self.col.snapshot()['today']
+        self.assertAlmostEqual(t['pv_kwh'], 12.8)
+        self.assertAlmostEqual(t['balance_pv_kwh'], 0.0)
+        self.assertAlmostEqual(t['home_kwh'], 0.0)
+        self.assertIsNone(t['self_use_pct'])
+        self.now = local_ts(14, 10)
+        self.set_pv_today(15.8)
+        self.set_meter(-2500, 41000.1, 22742.5)
+        self.col.poll()
+        t = self.col.snapshot()['today']
+        self.assertAlmostEqual(t['balance_pv_kwh'], 3.0)
+        self.assertAlmostEqual(t['home_kwh'], 3.0 + 0.1 - 2.5, places=2)
+        self.assertEqual(t['self_use_pct'], round((3.0 - 2.5) / 3.0 * 100))
 
     def test_new_day_resets_balance(self):
         self.now = local_ts(23, 59)

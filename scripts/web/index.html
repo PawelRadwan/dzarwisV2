@@ -67,7 +67,8 @@
   h1 { margin: 0 0 10px; font-size: 20px; font-weight: 700; }
   nav { display: flex; gap: 4px; background: var(--line); border-radius: 12px; padding: 4px; }
   nav a {
-    flex: 1; text-align: center; padding: 9px 4px; border-radius: 9px;
+    flex: 1; display: flex; align-items: center; justify-content: center; text-align: center;
+    padding: 7px 4px; min-height: 40px; border-radius: 9px; line-height: 1.15;
     color: var(--muted); text-decoration: none; font-weight: 600; font-size: 15px;
   }
   nav a[aria-current="page"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
@@ -103,7 +104,8 @@
   .pv-banner.warn { background: var(--warn-bg); color: var(--warn); }
   .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .stat.wide { grid-column: 1 / -1; }
-  @media (min-width: 700px) { .stats { grid-template-columns: repeat(4, 1fr); } .stat.wide { grid-column: auto; } }
+  @media (min-width: 700px) { .stats { grid-template-columns: repeat(4, 1fr); } .stats.three { grid-template-columns: repeat(3, 1fr); }
+                              .stat.wide { grid-column: auto; } }
   .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
   .stat-label { display: block; font-size: 14px; color: var(--muted); }
   .stat-value { display: block; margin-top: 6px; font-size: 26px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
@@ -194,7 +196,7 @@
   <h1>Dżarwis</h1>
   <nav>
     <a href="#oswietlenie" data-tab="oswietlenie">Oświetlenie</a>
-    <a href="#pv" data-tab="pv">PV</a>
+    <a href="#pv" data-tab="pv">Energia elektryczna</a>
     <a href="#ogrzewanie" data-tab="ogrzewanie">Ogrzewanie</a>
   </nav>
 </header>
@@ -272,7 +274,7 @@
   <section id="ogrzewanie" hidden>
     <div class="banner pv-banner" id="heat-banner" role="alert" hidden></div>
     <div class="banner pv-banner warn" id="heat-clock" hidden></div>
-    <div class="stats">
+    <div class="stats three">
       <div class="stat"><span class="stat-label">Stan</span><span class="stat-value" id="h-state">–</span></div>
       <div class="stat"><span class="stat-label">Sprężarka</span><span class="stat-value" id="h-power">–</span></div>
       <div class="stat wide"><span class="stat-label">Program</span><span class="stat-value" id="h-program">–</span></div>

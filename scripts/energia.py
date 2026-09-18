@@ -102,31 +102,31 @@ class EnergyStore:
                             'pv_today_kwh REAL, pv_total_kwh REAL, import_kwh REAL, export_kwh REAL)')
             # energia zbilansowana (suma faz) w minucie [Wh] - dodane 2026-09-18, starsze wiersze mają NULL
             cols = {row[1] for row in self.db.execute('PRAGMA table_info(samples)')}
-            for col in ('bal_import_wh', 'bal_export_wh'):
+            for col in ('bal_import_wh', 'bal_export_wh', 'bal_pv_wh'):
                 if col not in cols:
                     self.db.execute('ALTER TABLE samples ADD COLUMN %s REAL' % col)
             self.db.commit()
 
     def add(self, ts, pv_w, grid_w, home_w, pv_today_kwh, pv_total_kwh, import_kwh, export_kwh,
-            bal_import_wh=None, bal_export_wh=None):
+            bal_import_wh=None, bal_export_wh=None, bal_pv_wh=None):
         with self.lock:
             self.db.execute('INSERT OR REPLACE INTO samples (ts, pv_w, grid_w, home_w, pv_today_kwh, pv_total_kwh, '
-                            'import_kwh, export_kwh, bal_import_wh, bal_export_wh) '
-                            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                            'import_kwh, export_kwh, bal_import_wh, bal_export_wh, bal_pv_wh) '
+                            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                             (ts, pv_w, grid_w, home_w, pv_today_kwh, pv_total_kwh, import_kwh, export_kwh,
-                             bal_import_wh, bal_export_wh))
+                             bal_import_wh, bal_export_wh, bal_pv_wh))
             self.db.commit()
 
     def balanced_sum(self, start, end):
-        # (pobór Wh, oddanie Wh) zbilansowane w przedziale
-        row = self._query('SELECT COALESCE(SUM(bal_import_wh), 0), COALESCE(SUM(bal_export_wh), 0) FROM samples '
-                          'WHERE ts >= ? AND ts < ?', (start, end))[0]
-        return row[0], row[1]
+        # (pobór Wh, oddanie Wh, produkcja Wh) liczone moc x czas w przedziale
+        row = self._query('SELECT COALESCE(SUM(bal_import_wh), 0), COALESCE(SUM(bal_export_wh), 0), '
+                          'COALESCE(SUM(bal_pv_wh), 0) FROM samples WHERE ts >= ? AND ts < ?', (start, end))[0]
+        return tuple(row)
 
     def month_rows(self):
-        # tylko minuty z energią zbilansowaną - wszystkie wartości podsumowań za ten sam okres
-        return self._query('SELECT ts, bal_import_wh, bal_export_wh, pv_total_kwh FROM samples '
-                           'WHERE bal_import_wh IS NOT NULL ORDER BY ts', ())
+        # tylko minuty z kompletem energii (pobór, oddanie, produkcja) - wszystkie wartości za ten sam okres
+        return self._query('SELECT ts, bal_import_wh, bal_export_wh, bal_pv_wh FROM samples '
+                           'WHERE bal_pv_wh IS NOT NULL ORDER BY ts', ())
 
     def _query(self, sql, args):
         with self.lock:
@@ -140,7 +140,7 @@ class EnergyStore:
         # (ts, import_kwh, export_kwh, pv_today_kwh) - początek okresu bilansu dnia
         # tylko minuty z energią zbilansowaną - produkcja w bilansie liczona od tej samej chwili co pobór/oddanie
         rows = self._query('SELECT ts, import_kwh, export_kwh, pv_today_kwh FROM samples WHERE ts >= ? AND ts < ? '
-                           'AND bal_import_wh IS NOT NULL ORDER BY ts LIMIT 1', (start, end))
+                           'AND bal_pv_wh IS NOT NULL ORDER BY ts LIMIT 1', (start, end))
         return tuple(rows[0]) if rows else None
 
     def last_pv_today(self, start, end):
@@ -181,7 +181,8 @@ class Collector:
         self._store_call(self.store.add, b['ts'], _mean(b['pv']), _mean(b['grid']), _mean(b['home']),
                          last.get('pv_today_kwh'), last.get('pv_total_kwh'),
                          last.get('import_kwh'), last.get('export_kwh'),
-                         round(b['imp_wh'], 3) if b['meter'] else None, round(b['exp_wh'], 3) if b['meter'] else None)
+                         round(b['imp_wh'], 3) if b['meter'] else None, round(b['exp_wh'], 3) if b['meter'] else None,
+                         round(b['pv_wh'], 3) if b['meter'] else None)
 
     def poll(self):
         now = self.clock()
@@ -211,7 +212,7 @@ class Collector:
             self._bucket = None
         if self._bucket is None:
             self._bucket = {'ts': minute, 'pv': [], 'grid': [], 'home': [], 'last': {},
-                            'imp_wh': 0.0, 'exp_wh': 0.0, 'meter': False}
+                            'imp_wh': 0.0, 'exp_wh': 0.0, 'pv_wh': 0.0, 'meter': False}
         self._bucket['pv'].append(pv_w)
         # bilansowanie faz (jak licznik zakładu): moc łączna x czas od poprzedniego odczytu,
         # dodatnia -> pobór, ujemna -> oddanie; po przerwie > MAX_GAP nie doliczamy
@@ -220,6 +221,7 @@ class Collector:
             if 0 < dt <= MAX_GAP:
                 wh = m['grid_w'] * dt / 3600
                 self._bucket['imp_wh' if wh > 0 else 'exp_wh'] += abs(wh)
+                self._bucket['pv_wh'] += pv_w * dt / 3600      # produkcja tą samą metodą - bilanse spójne
             self._bucket['meter'] = True
         self._last_meter_ts = now if m else None
         if m:
@@ -239,18 +241,13 @@ class Collector:
         today = {'pv_kwh': pv_today, 'balance_pv_kwh': None, 'import_kwh': None, 'export_kwh': None,
                  'home_kwh': None, 'self_use_pct': None, 'since': None}
         if m:
-            pv_base = self._first[4] or 0.0
-            bal_pv = round(max(pv_today - pv_base, 0), 2)
-            # pobór/oddanie dziś zbilansowane: zapisane minuty + bieżąca minuta
-            stored = self._store_call(self.store.balanced_sum, day_start, day_end) or (0, 0)
-            cur_imp = self._bucket['imp_wh'] if self._bucket['ts'] >= day_start else 0
-            cur_exp = self._bucket['exp_wh'] if self._bucket['ts'] >= day_start else 0
-            imp = round((stored[0] + cur_imp) / 1000, 3)
-            exp = round((stored[1] + cur_exp) / 1000, 3)
-            today.update(balance_pv_kwh=bal_pv, import_kwh=imp, export_kwh=exp,
-                         home_kwh=round(max(bal_pv + imp - exp, 0), 2), since=self._first[1])
-            if bal_pv > 0:
-                today['self_use_pct'] = round(min(max((bal_pv - exp) / bal_pv * 100, 0), 100))
+            # bilans dnia: zapisane minuty + bieżąca minuta, wszystko moc x czas (jak w podsumowaniach)
+            stored = self._store_call(self.store.balanced_sum, day_start, day_end) or (0, 0, 0)
+            cur = self._bucket if self._bucket['ts'] >= day_start else {'imp_wh': 0, 'exp_wh': 0, 'pv_wh': 0}
+            s = self._summary((stored[0] + cur['imp_wh']) / 1000, (stored[1] + cur['exp_wh']) / 1000,
+                              (stored[2] + cur['pv_wh']) / 1000)
+            today.update(balance_pv_kwh=s['pv_kwh'], import_kwh=s['import_kwh'], export_kwh=s['export_kwh'],
+                         home_kwh=s['home_kwh'], self_use_pct=s['self_use_pct'], since=self._first[1])
 
         # moc na fazach; dom na fazie falownika = sieć + produkcja
         phases = []
@@ -286,38 +283,32 @@ class Collector:
             return self.latest
 
     def months(self):
-        # podsumowanie miesięczne (od najnowszego) i łączne: pobór/oddanie zbilansowane, produkcja z licznika
-        # falownika (różnica stanów), zużycie domu = produkcja + pobór - oddanie
-        rows = self._store_call(self.store.month_rows) or []
+        # podsumowanie miesięczne (od najnowszego) i łączne: pobór/oddanie zbilansowane, produkcja moc x czas,
+        # zużycie domu = produkcja + pobór - oddanie; ta sama metoda co bilans dnia
+        rows = list(self._store_call(self.store.month_rows) or [])
+        b = self._bucket
+        if b and b['meter']:                                   # bieżąca, jeszcze niezapisana minuta
+            rows.append((b['ts'], b['imp_wh'], b['exp_wh'], b['pv_wh']))
         months = {}
-        prev_total = None
-        for ts, imp_wh, exp_wh, pv_total in rows:
+        for ts, imp_wh, exp_wh, pv_wh in rows:
             key = time.strftime('%Y-%m', time.localtime(ts))
-            m = months.get(key)
-            if m is None:
-                m = months[key] = {'month': key, 'from_day': time.localtime(ts).tm_mday, 'imp_wh': 0.0,
-                                   'exp_wh': 0.0, 'pv_start': prev_total, 'pv_end': None}
-            m['imp_wh'] += imp_wh or 0
-            m['exp_wh'] += exp_wh or 0
-            if pv_total is not None:
-                if m['pv_start'] is None:
-                    m['pv_start'] = pv_total
-                m['pv_end'] = pv_total
-                prev_total = pv_total
-        out = []
-        for m in months.values():
-            pv = round(m['pv_end'] - m['pv_start'], 1) if m['pv_end'] is not None else 0.0
-            out.append(self._summary(m['imp_wh'] / 1000, m['exp_wh'] / 1000, pv,
-                                     month=m['month'], from_day=m['from_day']))
-        out.sort(key=lambda m: m['month'], reverse=True)
-        totals = self._summary(sum(m['import_kwh'] for m in out), sum(m['export_kwh'] for m in out),
-                               sum(m['pv_kwh'] for m in out))
+            m = months.setdefault(key, {'month': key, 'from_day': time.localtime(ts).tm_mday,
+                                        'imp': 0.0, 'exp': 0.0, 'pv': 0.0})
+            m['imp'] += imp_wh or 0
+            m['exp'] += exp_wh or 0
+            m['pv'] += pv_wh or 0
+        out = [self._summary(m['imp'] / 1000, m['exp'] / 1000, m['pv'] / 1000, month=m['month'], from_day=m['from_day'])
+               for m in sorted(months.values(), key=lambda m: m['month'], reverse=True)]
+        # sumy łączne z wartości niezaokrąglonych
+        totals = self._summary(sum(m['imp'] for m in months.values()) / 1000,
+                               sum(m['exp'] for m in months.values()) / 1000,
+                               sum(m['pv'] for m in months.values()) / 1000)
         return {'since': rows[0][0] if rows else None, 'totals': totals, 'months': out}
 
     @staticmethod
     def _summary(imp, exp, pv, **extra):
-        s = dict(extra, import_kwh=round(imp, 2), export_kwh=round(exp, 2), pv_kwh=round(pv, 1),
-                 home_kwh=round(max(pv + imp - exp, 0), 2), self_use_pct=None)
+        s = dict(extra, import_kwh=round(imp, 3), export_kwh=round(exp, 3), pv_kwh=round(pv, 3),
+                 home_kwh=round(max(pv + imp - exp, 0), 3), self_use_pct=None)
         if pv > 0:
             s['self_use_pct'] = round(min(max((pv - exp) / pv * 100, 0), 100))
         return s

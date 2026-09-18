@@ -1,184 +1,111 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+# obsługa przycisków oświetlenia: puszczenie przycisku (zbocze 1 -> 0 na wejściu WAGO)
+# przełącza przypisaną lampę. Opis: docs/skrypty.md, mapa wejść: docs/mapa-io.md
+
+import logging
 import time
 import dzarwis_global_vars as dgv
 from pyModbusTCP.client import ModbusClient
 
-def interprate_outputs(ob):
-    #print(ob)
-    on_optputs_names = []
-    index = 0
-    for o in ob:
-        if o==1:
-            for out in dgv.PLC.Douts:
-                if index == out.out_num_sw:
-                    on_optputs_names.append(out.nazwa)
-        index +=1
-    return on_optputs_names
+# (rejestr wejść, bit) -> nazwa wyjścia z dgv.PLC.Douts
+PRZYCISKI = {
+    (0, 0): 'swiatlo lazienka',
+    (0, 1): 'swiatlo biuro',
+    (0, 2): 'swiatlo kuchnia',
+    (0, 3): 'swiatlo salon kinkiety',
+    (0, 4): 'swiatlo wiatrolap',
+    (0, 5): 'swiatlo jadalnia',
+    (0, 6): 'swiatlo nad schodami',
+    (0, 7): 'swiatlo hol',
+    (0, 8): 'swiatlo Ola',
+    (0, 9): 'swiatlo Pawel',
+    (0, 10): 'swiatlo Natka',
+    (0, 11): 'swiatlo Natka 2',
+    (0, 12): 'swiatlo pralnia',
+    (0, 13): 'swiatlo sypialnia',
+    (1, 0): 'swiatlo salon',
+    (1, 1): 'swiatlo przejscie',
+    (1, 2): 'swiatlo spizarnia',
+    (1, 3): 'swiatlo lazienka gora',
+}
 
-def wago_read_outputs(mb):
-    # wyjścia wgo są dostępne na holdingach w przestrzni adresowej 512-767
-    outputs = []
-    start_reg = dgv.PLC.out_start_reg
-    lrc = 125
-    while lrc > 0:
-        outputs.extend(mb.read_holding_registers(start_reg, lrc))
-        # print(f'start:{start_reg} ilość  do odczytu:{lrc}')
-        start_reg += lrc
-        if start_reg + lrc > dgv.PLC.out_stop_reg:
-            lrc = dgv.PLC.out_stop_reg - start_reg
-    # print(outputs)
-    ob = []
-    for o in outputs:
-        add = list("{0:016b}".format(o))[::-1]
-        # print(add)
-        ob.extend(add)
-    obb = []
-    for i in ob:
-        obb.append(int(i))
+# wejścia wago są dostępne na holdingach od rejestru 0
+IN_START_REG = 0
+IN_REG_COUNT = 4
 
-    return (obb)
+POLL_INTERVAL = 0.05    # s, okres odpytywania wejść
+ERROR_DELAY = 1         # s, przerwa po błędzie komunikacji
+MODBUS_TIMEOUT = 2      # s, domyślnie pyModbusTCP czeka 30 s
 
-def wago_set_outputs(mb,outs_sw_nums):
-    #print('set')
-    current_status = wago_read_outputs(mb)
-    #print(current_status)
-    set_list = wago_read_outputs(mb)
-    for o in outs_sw_nums:
-        set_list[o['sw_num']] = o['state']
-    i=0
-    while i < len(current_status):
-        iter=set_list[i:i+16]
-        if iter != current_status[i:i+16]:
-            #print(iter)
-            reg_v = int("".join(str(x) for x in iter[::-1]), 2)
-            #print(reg_v)
-            reg_num=(dgv.PLC.out_start_reg + int(i/16))
-            # print(f'zapisuje wartość {reg_v} od rejestru {reg_num}')
-            write = mb.write_single_register(reg_num,reg_v)
-            # print(write)
-        i += 16
+log = logging.getLogger('lights')
 
 
-def set_light(w_mb,nazwa,state):
-    for o in dgv.PLC.Douts:
-        if o.nazwa == nazwa:
-            onum = o.out_num_sw
-            # print(f'załącz numer wyjścia:{onum}')
-            wago_set_outputs(w_mb, [{'sw_num': onum, 'state': state}])
+class ModbusError(Exception):
+    pass
 
 
-w_mb = ModbusClient(host = dgv.PLC.ip, unit_id=dgv.PLC.uid, port=dgv.PLC.port,auto_open=True,auto_close=True)
-old_inputs = inputs = w_mb.read_holding_registers(0, 4)
+def read_registers(mb, start, count):
+    # pyModbusTCP przy błędzie zwraca None zamiast rzucać wyjątek
+    regs = mb.read_holding_registers(start, count)
+    if regs is None:
+        raise ModbusError(f'odczyt rejestrów {start}-{start + count - 1} nieudany (kod błędu {mb.last_error})')
+    return regs
 
-while True:
+
+def toggle_light(mb, nazwa):
+    out = next((o for o in dgv.PLC.Douts if o.nazwa == nazwa), None)
+    if out is None:
+        log.warning('brak wyjścia o nazwie %r w dgv.PLC.Douts', nazwa)
+        return
+    # wyjścia wago są dostępne na holdingach od rejestru 512, 16 wyjść na rejestr
+    reg_num = dgv.PLC.out_start_reg + out.out_num_sw // 16
+    bit = out.out_num_sw % 16
+    value = read_registers(mb, reg_num, 1)[0]
+    new_value = value ^ (1 << bit)
+    if not mb.write_single_register(reg_num, new_value):
+        raise ModbusError(f'zapis rejestru {reg_num} nieudany (kod błędu {mb.last_error})')
+    log.info('%s: %s', nazwa, 'włączone' if new_value >> bit & 1 else 'wyłączone')
+
+
+def released_buttons(old_inputs, inputs):
+    # pozycje (rejestr, bit), na których wejście zmieniło się z 1 na 0
+    for reg, (old, new) in enumerate(zip(old_inputs, inputs)):
+        falling = old & ~new
+        for bit in range(16):
+            if falling >> bit & 1:
+                yield reg, bit
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s %(message)s')
+    w_mb = ModbusClient(host=dgv.PLC.ip, unit_id=dgv.PLC.uid, port=dgv.PLC.port,
+                        auto_open=True, auto_close=False, timeout=MODBUS_TIMEOUT)
+    log.info('start, WAGO %s:%s', dgv.PLC.ip, dgv.PLC.port)
+    old_inputs = None
+    while True:
+        try:
+            inputs = read_registers(w_mb, IN_START_REG, IN_REG_COUNT)
+            if old_inputs is None:
+                log.info('połączenie z WAGO OK')
+            else:
+                for pos in released_buttons(old_inputs, inputs):
+                    if pos in PRZYCISKI:
+                        toggle_light(w_mb, PRZYCISKI[pos])
+            old_inputs = inputs
+        except Exception as e:
+            # nie kończ procesu - po odzyskaniu łączności stan wejść jest czytany od nowa,
+            # żeby zmiany z czasu przerwy nie przełączyły lamp
+            log.error('%s: %s - ponowna próba za %s s', type(e).__name__, e, ERROR_DELAY)
+            w_mb.close()
+            old_inputs = None
+            time.sleep(ERROR_DELAY)
+            continue
+        time.sleep(POLL_INTERVAL)
+
+
+if __name__ == '__main__':
     try:
-        inputs = w_mb.read_holding_registers(0, 4)
-    except:
-        print(' mb read error ')
-        time.sleep(0.5)
-        continue
-    for i in range(len(inputs)):
-        if inputs[i] != old_inputs[i]:
-            new = list(format(inputs[i], '016b'))
-            old = list(format(old_inputs[i], '016b'))
-            for x in range(len(new)):
-                if new[x] != old[x] and old[x] == '1':
-                    outs = wago_read_outputs(w_mb)
-                    lights = interprate_outputs(outs)
-                    if i == 0:
-                        if 16 - x == 1:
-                            if 'swiatlo lazienka' in lights:
-                                set_light(w_mb, 'swiatlo lazienka', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo lazienka', 1)
-                        elif 16 - x == 2:
-                            if 'swiatlo biuro' in lights:
-                                set_light(w_mb, 'swiatlo biuro', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo biuro', 1)
-                        elif 16 - x == 3:
-                            if 'swiatlo kuchnia' in lights:
-                                set_light(w_mb, 'swiatlo kuchnia', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo kuchnia', 1)
-                        elif 16 - x == 4:
-                            if 'swiatlo salon kinkiety' in lights:
-                                set_light(w_mb, 'swiatlo salon kinkiety', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo salon kinkiety', 1)
-                        elif 16 - x == 5:
-                            if 'swiatlo wiatrolap' in lights:
-                                set_light(w_mb, 'swiatlo wiatrolap', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo wiatrolap', 1)
-                        elif 16 - x == 6:
-                            if 'swiatlo jadalnia' in lights:
-                                set_light(w_mb, 'swiatlo jadalnia', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo jadalnia', 1)
-                        elif 16 - x == 7:
-                            if 'swiatlo nad schodami' in lights:
-                                set_light(w_mb, 'swiatlo nad schodami', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo nad schodami', 1)
-                        elif 16 - x == 8:
-                            if 'swiatlo hol' in lights:
-                                set_light(w_mb, 'swiatlo hol', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo hol', 1)
-                        elif 16 - x == 9:
-                            if 'swiatlo Ola' in lights:
-                                set_light(w_mb, 'swiatlo Ola', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo Ola', 1)
-                        elif 16 - x == 10:
-                            if 'swiatlo Pawel' in lights:
-                                set_light(w_mb, 'swiatlo Pawel', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo Pawel', 1)
-                        elif 16 - x == 11:
-                            if 'swiatlo Natka' in lights:
-                                set_light(w_mb, 'swiatlo Natka', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo Natka', 1)
-                        elif 16 - x == 12:
-                            if 'swiatlo Natka 2' in lights:
-                                set_light(w_mb, 'swiatlo Natka 2', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo Natka 2', 1)
-                        elif 16 - x == 13:
-                            if 'swiatlo pralnia' in lights:
-                                set_light(w_mb, 'swiatlo pralnia', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo pralnia', 1)
-                        elif 16 - x == 14:
-                            if 'swiatlo sypialnia' in lights:
-                                set_light(w_mb, 'swiatlo sypialnia', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo sypialnia', 1)
-                    elif i == 1:
-                        if 16 - x == 1:
-                            if 'swiatlo salon' in lights:
-                                set_light(w_mb, 'swiatlo salon', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo salon', 1)
-                        elif 16 - x == 2:
-                            if 'swiatlo przejscie' in lights:
-                                set_light(w_mb, 'swiatlo przejscie', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo przejscie', 1)
-                        elif 16 - x == 3:
-                            if 'swiatlo spizarnia' in lights:
-                                set_light(w_mb, 'swiatlo spizarnia', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo spizarnia', 1)
-                        elif 16 - x == 4:
-                            if 'swiatlo lazienka gora' in lights:
-                                set_light(w_mb, 'swiatlo lazienka gora', 0)
-                            else:
-                                set_light(w_mb, 'swiatlo lazienka gora', 1)
-                    # print(f'{i}_{x}')
-    old_inputs = inputs
-    time.sleep(0.05)
-
-
-print(b_inputs_1)
+        main()
+    except KeyboardInterrupt:
+        print('Interrupted')

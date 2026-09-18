@@ -12,18 +12,18 @@ influx_energia_db_name ='Energia'
 NT_day_start = 13
 NT_day_stop = 15
 # godzina wymyszenego mieszania rano 
-mix_hour =10
+mix_hour = 10
 # czas trwania mieszania w minutach
 mix_time = 10
 
 @dataclass
 class DO:
-    # data klasa opisująca wyjcie
+    # data klasa opisujaca wyjcie
     card_num: int
     out_num_hw: int
     out_num_sw: int
     nazwa : str
-    
+
 @dataclass
 # definicja konfiguracji PLC
 class PLC:

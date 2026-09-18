@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16181d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dżarwis">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<title>Dżarwis</title>
+<style>
+  :root {
+    --bg: #f3f4f6;
+    --panel: #ffffff;
+    --text: #1b1d22;
+    --muted: #6b7280;
+    --line: #e2e4e9;
+    --on-bg: #ffd54a;
+    --on-text: #3b2f00;
+    --on-glow: rgba(255, 196, 0, .45);
+    --accent: #2563eb;
+    --danger: #dc2626;
+    --danger-bg: #fee2e2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181d;
+      --panel: #22252c;
+      --text: #eceef2;
+      --muted: #9aa0ab;
+      --line: #30343c;
+      --on-bg: #ffcf3a;
+      --on-text: #2e2400;
+      --on-glow: rgba(255, 196, 0, .35);
+      --accent: #60a5fa;
+      --danger: #f87171;
+      --danger-bg: #3b1d1d;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 16px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  header {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--bg);
+    padding: calc(env(safe-area-inset-top) + 12px) 16px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  h1 { margin: 0 0 10px; font-size: 20px; font-weight: 700; }
+  nav { display: flex; gap: 4px; background: var(--line); border-radius: 12px; padding: 4px; }
+  nav a {
+    flex: 1; text-align: center; padding: 9px 4px; border-radius: 9px;
+    color: var(--muted); text-decoration: none; font-weight: 600; font-size: 15px;
+  }
+  nav a[aria-current="page"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  main { padding: 14px 16px 24px; max-width: 900px; margin: 0 auto; }
+  .banner {
+    display: none; margin: 0 0 12px; padding: 10px 12px; border-radius: 10px;
+    background: var(--danger-bg); color: var(--danger); font-weight: 600;
+  }
+  .offline .banner { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .tile {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+    min-height: 96px; padding: 12px 14px; border-radius: 16px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); font: inherit; text-align: left;
+    cursor: pointer; touch-action: manipulation; user-select: none;
+    transition: background .15s, box-shadow .15s, transform .08s;
+  }
+  .tile:active { transform: scale(.97); }
+  .tile svg { width: 26px; height: 26px; color: var(--muted); }
+  .tile .name { font-weight: 650; font-size: 16px; }
+  .tile .state { font-size: 14px; color: var(--muted); margin-top: auto; }
+  .tile.on { background: var(--on-bg); border-color: transparent; color: var(--on-text); box-shadow: 0 4px 16px var(--on-glow); }
+  .tile.on svg, .tile.on .state { color: var(--on-text); }
+  .tile.pending { opacity: .55; }
+  .offline .tile, .offline .all-off { opacity: .4; pointer-events: none; box-shadow: none; }
+  .all-off {
+    display: block; width: 100%; margin-top: 18px; padding: 15px; border-radius: 14px;
+    border: 1.5px solid var(--danger); background: transparent; color: var(--danger);
+    font: inherit; font-weight: 700; cursor: pointer; touch-action: manipulation;
+  }
+  .all-off:disabled { opacity: .4; }
+  .soon { padding: 48px 8px; text-align: center; color: var(--muted); }
+  .soon strong { display: block; font-size: 18px; color: var(--text); margin-bottom: 6px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Dżarwis</h1>
+  <nav>
+    <a href="#oswietlenie" data-tab="oswietlenie">Oświetlenie</a>
+    <a href="#pv" data-tab="pv">PV</a>
+    <a href="#ogrzewanie" data-tab="ogrzewanie">Ogrzewanie</a>
+  </nav>
+</header>
+
+<main>
+  <section id="oswietlenie">
+    <div class="banner" role="alert">Brak połączenia ze sterownikiem</div>
+    <div class="grid" id="lights"></div>
+    <button class="all-off" id="all-off" type="button">Wyłącz wszystko</button>
+  </section>
+  <section id="pv" hidden>
+    <div class="soon"><strong>Fotowoltaika</strong>Wkrótce</div>
+  </section>
+  <section id="ogrzewanie" hidden>
+    <div class="soon"><strong>Ogrzewanie</strong>Wkrótce</div>
+  </section>
+</main>
+
+<template id="tile">
+  <button class="tile" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>
+    </svg>
+    <span class="name"></span>
+    <span class="state"></span>
+  </button>
+</template>
+
+<script>
+(function () {
+  var POLL_MS = 2000;
+  var grid = document.getElementById('lights');
+  var section = document.getElementById('oswietlenie');
+  var allOff = document.getElementById('all-off');
+  var tiles = {};       // id -> element
+  var state = {};       // id -> true/false
+  var version = 0;      // rośnie przy każdej zmianie z tej strony; stare odpowiedzi odświeżania są odrzucane
+  var timer = null;
+
+  // --- zakładki ---
+  function showTab() {
+    var tab = (location.hash || '#oswietlenie').slice(1);
+    if (!document.getElementById(tab)) tab = 'oswietlenie';
+    document.querySelectorAll('main > section').forEach(function (s) { s.hidden = s.id !== tab; });
+    document.querySelectorAll('nav a').forEach(function (a) {
+      if (a.dataset.tab === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+  }
+  window.addEventListener('hashchange', showTab);
+  showTab();
+
+  // --- komunikacja z serwerem ---
+  function api(method, path, body) {
+    return fetch(path, {
+      method: method,
+      cache: 'no-store',
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) {
+      return r.json().then(function (data) {
+        if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+        return data;
+      });
+    });
+  }
+
+  function setOnline(ok) {
+    section.classList.toggle('offline', !ok);
+  }
+
+  // --- widok ---
+  function render(lights) {
+    lights.forEach(function (l) {
+      var el = tiles[l.id];
+      if (!el) {
+        el = document.getElementById('tile').content.firstElementChild.cloneNode(true);
+        el.querySelector('.name').textContent = l.label;
+        el.addEventListener('click', function () { toggle(l.id); });
+        grid.appendChild(el);
+        tiles[l.id] = el;
+      }
+      state[l.id] = l.on;
+      el.classList.toggle('on', l.on);
+      el.setAttribute('aria-pressed', l.on ? 'true' : 'false');
+      el.querySelector('.state').textContent = l.on ? 'Świeci' : 'Zgaszone';
+    });
+  }
+
+  function refresh() {
+    var v = version;
+    return api('GET', '/api/lights').then(function (data) {
+      if (v === version) render(data.lights);
+      setOnline(true);
+    }).catch(function () { setOnline(false); });
+  }
+
+  function change(el, request) {
+    version++;
+    if (el) el.classList.add('pending');
+    return request.then(function (data) {
+      version++;
+      render(data.lights);
+      setOnline(true);
+    }).catch(function () {
+      setOnline(false);
+    }).then(function () {
+      if (el) el.classList.remove('pending');
+    });
+  }
+
+  function toggle(id) {
+    var el = tiles[id];
+    if (el.classList.contains('pending')) return;
+    if (navigator.vibrate) navigator.vibrate(10);
+    change(el, api('POST', '/api/lights', { id: id, on: !state[id] }));
+  }
+
+  allOff.addEventListener('click', function () {
+    if (!confirm('Wyłączyć wszystkie światła?')) return;
+    allOff.disabled = true;
+    change(null, api('POST', '/api/lights/all-off')).then(function () { allOff.disabled = false; });
+  });
+
+  // --- odświeżanie co 2 s, wstrzymane gdy karta jest w tle ---
+  function start() {
+    if (timer) return;
+    refresh();
+    timer = setInterval(refresh, POLL_MS);
+  }
+  function stop() {
+    clearInterval(timer);
+    timer = null;
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) stop(); else start();
+  });
+  start();
+})();
+</script>
+</body>
+</html>

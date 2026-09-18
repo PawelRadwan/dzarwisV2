@@ -204,6 +204,9 @@ class FakeCollector:
     def day(self):
         return {'date': '2026-09-18', 'points': [[1789725600, 3500.0, 400.0]]}
 
+    def months(self):
+        return {'since': 1789725600, 'totals': {'import_kwh': 1.0}, 'months': [{'month': '2026-09'}]}
+
 
 class PvHttpTest(unittest.TestCase):
     def start(self, energy):
@@ -234,6 +237,12 @@ class PvHttpTest(unittest.TestCase):
         status, data = self.get('/api/pv/day')
         self.assertEqual(status, 200)
         self.assertEqual(data['points'][0][1], 3500.0)
+
+    def test_pv_months(self):
+        self.start(FakeCollector({}))
+        status, data = self.get('/api/pv/months')
+        self.assertEqual(status, 200)
+        self.assertEqual(data['months'][0]['month'], '2026-09')
 
     def test_pv_no_data_yet(self):
         self.start(FakeCollector(None))

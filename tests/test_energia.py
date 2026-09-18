@@ -137,68 +137,110 @@ class CollectorTest(unittest.TestCase):
         self.assertEqual(len(s['strings']), 2)
         self.assertAlmostEqual(s['totals']['pv_kwh'], 29709.1)
 
+    def polls(self, start, grid_w, count, step=5):
+        # kolejne odczyty co step sekund z tą samą mocą sieci
+        for i in range(count):
+            self.now = start + i * step
+            self.set_meter(grid_w, 41000.0, 22740.0)
+            self.col.poll()
+        return start + count * step
+
+    def test_balanced_import_export(self):
+        # bilansowanie faz: dodatnia moc łączna -> pobór, ujemna -> oddanie; moc x czas od poprzedniego odczytu
+        t = self.polls(local_ts(12, 0), 36000, 3)             # 2 przedziały po 5 s x 36 kW = 100 Wh
+        self.polls(t, -72000, 2)                              # 2 x 5 s x 72 kW = 200 Wh
+        today = self.col.snapshot()['today']
+        self.assertAlmostEqual(today['import_kwh'], 0.1, places=3)
+        self.assertAlmostEqual(today['export_kwh'], 0.2, places=3)
+
+    def test_gap_not_integrated(self):
+        self.polls(local_ts(12, 0), 36000, 1)
+        self.polls(local_ts(12, 2), 36000, 1)                 # 120 s przerwy - nie doliczamy
+        self.assertAlmostEqual(self.col.snapshot()['today']['import_kwh'], 0.0)
+
     def test_day_balance(self):
-        self.now = local_ts(0, 0, 30)
         self.set_pv_today(0)
-        self.set_meter(300, 41000.0, 22740.0)
-        self.col.poll()
-        self.now = local_ts(12, 50)
+        t = self.polls(local_ts(0, 0, 30), 36000, 3)          # pobór 0.1 kWh
         self.set_pv_today(12.3)
-        self.set_meter(-3000, 41002.5, 22748.0)
-        self.col.poll()
-        t = self.col.snapshot()['today']
-        self.assertAlmostEqual(t['balance_pv_kwh'], 12.3)
-        self.assertAlmostEqual(t['import_kwh'], 2.5, places=2)
-        self.assertAlmostEqual(t['export_kwh'], 8.0, places=2)
-        self.assertAlmostEqual(t['pv_kwh'], 12.3)
-        self.assertAlmostEqual(t['home_kwh'], 12.3 + 2.5 - 8.0, places=2)
-        self.assertEqual(t['self_use_pct'], round((12.3 - 8.0) / 12.3 * 100))
-        self.assertEqual(t['since'], int(local_ts(0, 0, 30)))
+        self.polls(t, -72000, 2)                              # oddanie 0.2 kWh
+        d = self.col.snapshot()['today']
+        self.assertAlmostEqual(d['balance_pv_kwh'], 12.3)
+        self.assertAlmostEqual(d['pv_kwh'], 12.3)
+        self.assertAlmostEqual(d['home_kwh'], 12.3 + 0.1 - 0.2, places=2)
+        self.assertEqual(d['self_use_pct'], round((12.3 - 0.2) / 12.3 * 100))
+        self.assertEqual(d['since'], int(local_ts(0, 0, 30)))
 
     def test_day_balance_survives_restart(self):
-        self.now = local_ts(6, 0)
-        self.set_meter(300, 41000.0, 22740.0)
-        self.col.poll()
-        self.now = local_ts(6, 1, 5)
-        self.col.poll()                       # nowa minuta -> zapis do bazy
+        t = self.polls(local_ts(6, 0), 36000, 3)              # 0.1 kWh w minucie 6:00
+        self.polls(local_ts(6, 1, 5), 36000, 1)               # nowa minuta -> zapis 6:00 do bazy (przerwa > 30 s)
         col2 = energia.Collector(self.gw, self.store, clock=lambda: self.now)
-        self.now = local_ts(13, 0)
-        self.set_meter(-3000, 41001.0, 22745.0)
-        col2.poll()
-        t = col2.snapshot()['today']
-        self.assertAlmostEqual(t['import_kwh'], 1.0, places=2)
-        self.assertEqual(t['since'], int(local_ts(6, 0)))
+        self.col = col2
+        self.polls(local_ts(13, 0), 36000, 3)                 # kolejne 0.1 kWh
+        d = col2.snapshot()['today']
+        self.assertAlmostEqual(d['import_kwh'], 0.2, places=3)
+        self.assertEqual(d['since'], int(local_ts(6, 0)))
 
     def test_started_mid_day_balance_covers_same_period(self):
         # start zbierania o 13:10 - produkcja od północy (12.8) nie może trafić do bilansu od 13:10
-        self.now = local_ts(13, 10)
         self.set_pv_today(12.8)
-        self.set_meter(-3000, 41000.0, 22740.0)
-        self.col.poll()
-        t = self.col.snapshot()['today']
-        self.assertAlmostEqual(t['pv_kwh'], 12.8)
-        self.assertAlmostEqual(t['balance_pv_kwh'], 0.0)
-        self.assertAlmostEqual(t['home_kwh'], 0.0)
-        self.assertIsNone(t['self_use_pct'])
-        self.now = local_ts(14, 10)
-        self.set_pv_today(15.8)
-        self.set_meter(-2500, 41000.1, 22742.5)
-        self.col.poll()
-        t = self.col.snapshot()['today']
-        self.assertAlmostEqual(t['balance_pv_kwh'], 3.0)
-        self.assertAlmostEqual(t['home_kwh'], 3.0 + 0.1 - 2.5, places=2)
-        self.assertEqual(t['self_use_pct'], round((3.0 - 2.5) / 3.0 * 100))
+        t = self.polls(local_ts(13, 10), -36000, 1)
+        d = self.col.snapshot()['today']
+        self.assertAlmostEqual(d['pv_kwh'], 12.8)
+        self.assertAlmostEqual(d['balance_pv_kwh'], 0.0)
+        self.assertAlmostEqual(d['home_kwh'], 0.0)
+        self.assertIsNone(d['self_use_pct'])
+        self.set_pv_today(13.1)
+        self.polls(t, -36000, 2)                              # oddanie 2 x 5 s x 36 kW = 0.1 kWh
+        d = self.col.snapshot()['today']
+        self.assertAlmostEqual(d['balance_pv_kwh'], 0.3)
+        self.assertAlmostEqual(d['export_kwh'], 0.1, places=3)
+        self.assertAlmostEqual(d['home_kwh'], 0.3 - 0.1, places=2)
+        self.assertEqual(d['self_use_pct'], round((0.3 - 0.1) / 0.3 * 100))
 
     def test_new_day_resets_balance(self):
-        self.now = local_ts(23, 59)
-        self.set_meter(300, 41000.0, 22740.0)
-        self.col.poll()
-        self.now = local_ts(0, 1, day=19)
-        self.set_meter(300, 41000.2, 22740.0)
-        self.col.poll()
-        t = self.col.snapshot()['today']
-        self.assertAlmostEqual(t['import_kwh'], 0.0)
-        self.assertEqual(t['since'], int(local_ts(0, 1, day=19)))
+        t = self.polls(local_ts(23, 59, 50), 36000, 2)        # 50 Wh jeszcze 18.09
+        self.polls(local_ts(0, 0, 0, day=19), 36000, 1)       # 50 Wh już 19.09
+        d = self.col.snapshot()['today']
+        self.assertAlmostEqual(d['import_kwh'], 0.05, places=3)
+        self.assertEqual(d['since'], int(local_ts(0, 0, 0, day=19)))
+
+    def test_months_and_totals(self):
+        s = self.store
+        # wrzesień: 2 minuty, październik: 1 minuta; produkcja z licznika falownika (pv_total_kwh)
+        s.add(int(local_ts(12, 0, day=18)), 3000, -2000, 1000, 5.0, 29700.0, 41000, 22740, 100.0, 2000.0)
+        s.add(int(local_ts(12, 1, day=30)), 3000, -2000, 1000, 9.0, 29760.0, 41000, 22740, 400.0, 3000.0)
+        s.add(int(time.mktime((2026, 10, 2, 12, 0, 0, 0, 0, -1))), 0, 500, 500, 1.0, 29790.0, 41000, 22740,
+              500.0, 0.0)
+        m = self.col.months()
+        self.assertEqual([x['month'] for x in m['months']], ['2026-10', '2026-09'])
+        oct_, sep = m['months']
+        self.assertAlmostEqual(sep['import_kwh'], 0.5)
+        self.assertAlmostEqual(sep['export_kwh'], 5.0)
+        self.assertAlmostEqual(sep['pv_kwh'], 60.0)              # 29760 - 29700
+        self.assertAlmostEqual(sep['home_kwh'], 60.0 + 0.5 - 5.0)
+        self.assertEqual(sep['self_use_pct'], round((60.0 - 5.0) / 60.0 * 100))
+        self.assertEqual(sep['from_day'], 18)
+        self.assertAlmostEqual(oct_['pv_kwh'], 30.0)              # od ostatniego stanu września
+        self.assertEqual(oct_['from_day'], 2)
+        self.assertAlmostEqual(m['totals']['import_kwh'], 1.0)
+        self.assertAlmostEqual(m['totals']['export_kwh'], 5.0)
+        self.assertAlmostEqual(m['totals']['pv_kwh'], 90.0)
+        self.assertEqual(m['since'], int(local_ts(12, 0, day=18)))
+
+    def test_old_database_migrated(self):
+        import sqlite3
+        import tempfile
+        path = os.path.join(tempfile.mkdtemp(), 'energia.db')
+        db = sqlite3.connect(path)
+        db.execute('CREATE TABLE samples (ts INTEGER PRIMARY KEY, pv_w REAL, grid_w REAL, home_w REAL, '
+                   'pv_today_kwh REAL, pv_total_kwh REAL, import_kwh REAL, export_kwh REAL)')
+        db.execute('INSERT INTO samples VALUES (1, 2, 3, 4, 5, 6, 7, 8)')
+        db.commit()
+        db.close()
+        st = energia.EnergyStore(path)
+        st.add(60, 1, 2, 3, 4, 5, 6, 7, 10.0, 20.0)
+        rows = st.db.execute('SELECT ts, pv_w, bal_import_wh, bal_export_wh FROM samples ORDER BY ts').fetchall()
+        self.assertEqual(rows, [(1, 2.0, None, None), (60, 1.0, 10.0, 20.0)])
 
     def test_phases(self):
         # falownik jednofazowy na L1: dom na L1 = sieć L1 + produkcja, na L2/L3 = sieć

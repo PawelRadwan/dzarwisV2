@@ -140,6 +140,11 @@
   .phases .n small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .phases .v { text-align: right; font-weight: 600; font-size: 17px; font-variant-numeric: tabular-nums; }
   .phases .v small { display: block; white-space: nowrap; font-weight: 400; font-size: 12px; color: var(--muted); }
+  .month { border-top: 1px solid var(--line); padding: 10px 0 2px; }
+  .month:first-of-type { border-top: 0; }
+  .month h3 { margin: 0 0 6px; font-size: 15px; }
+  .month h3 span { font-weight: 400; color: var(--muted); font-size: 13px; }
+  .month .rows { margin-top: 4px; }
   .strings { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
   .string { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
   .string .w { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -233,6 +238,21 @@
       </dl>
     </div>
     <div class="card">
+      <h2>Łącznie <span id="tot-since"></span></h2>
+      <dl class="rows">
+        <dt>Pobrano z sieci</dt><dd id="tot-import">–</dd>
+        <dt>Oddano do sieci</dt><dd id="tot-export">–</dd>
+        <dt>Produkcja</dt><dd id="tot-pv">–</dd>
+        <dt>Zużycie domu</dt><dd id="tot-home">–</dd>
+        <dt>Autokonsumpcja</dt><dd id="tot-self">–</dd>
+      </dl>
+      <div class="note">Pobór i oddanie zbilansowane po fazach — jak licznik zakładu energetycznego.</div>
+    </div>
+    <div class="card">
+      <h2>Miesiące</h2>
+      <div id="months"></div>
+    </div>
+    <div class="card">
       <h2>Stringi PV</h2>
       <div class="strings" id="strings"></div>
     </div>
@@ -244,8 +264,8 @@
         <dt>Częstotliwość sieci</dt><dd id="i-freq">–</dd>
         <dt>Kody błędu / ostrzeżenia</dt><dd id="i-codes">–</dd>
         <dt>Produkcja łącznie</dt><dd id="t-pv">–</dd>
-        <dt>Pobrano łącznie</dt><dd id="t-import">–</dd>
-        <dt>Oddano łącznie</dt><dd id="t-export">–</dd>
+        <dt>Licznik SDM630: pobrano <small>(po fazach)</small></dt><dd id="t-import">–</dd>
+        <dt>Licznik SDM630: oddano <small>(po fazach)</small></dt><dd id="t-export">–</dd>
       </dl>
     </div>
   </section>
@@ -538,6 +558,46 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json().then(renderPv);
     }).catch(function () { showPvBanner('Brak połączenia z panelem'); });
+  }
+
+  var MONTHS = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec', 'Lipiec', 'Sierpień', 'Wrzesień',
+                'Październik', 'Listopad', 'Grudzień'];
+  function kwhText(v, d) { return v == null ? null : num(v, d == null ? 1 : d) + ' kWh'; }
+
+  function renderMonths(d) {
+    var t = d.totals;
+    setText('tot-since', d.since ? 'od ' + new Date(d.since * 1000).toLocaleDateString('pl-PL') : '');
+    setText('tot-import', kwhText(t.import_kwh)); setText('tot-export', kwhText(t.export_kwh));
+    setText('tot-pv', kwhText(t.pv_kwh)); setText('tot-home', kwhText(t.home_kwh));
+    setText('tot-self', t.self_use_pct == null ? null : t.self_use_pct + '%');
+    var box = $('months');
+    box.textContent = '';
+    if (!d.months.length) { box.textContent = 'Brak danych'; return; }
+    d.months.forEach(function (m, i) {
+      var y = m.month.slice(0, 4), mo = +m.month.slice(5, 7);
+      var el = document.createElement('div'); el.className = 'month';
+      var h = document.createElement('h3'); h.textContent = MONTHS[mo - 1] + ' ' + y;
+      var first = i === d.months.length - 1 && m.from_day > 1;        // najstarszy, niepełny miesiąc
+      if (first) { var sp = document.createElement('span'); sp.textContent = '  od ' + m.from_day + '.' + String(mo).padStart(2, '0'); h.appendChild(sp); }
+      el.appendChild(h);
+      var dl = document.createElement('dl'); dl.className = 'rows';
+      [['Pobrano z sieci', kwhText(m.import_kwh)], ['Oddano do sieci', kwhText(m.export_kwh)],
+       ['Produkcja', kwhText(m.pv_kwh)], ['Zużycie domu', kwhText(m.home_kwh)],
+       ['Autokonsumpcja', m.self_use_pct == null ? '–' : m.self_use_pct + '%']].forEach(function (r) {
+        var dt = document.createElement('dt'); dt.textContent = r[0];
+        var dd = document.createElement('dd'); dd.textContent = r[1] == null ? '–' : r[1];
+        dl.appendChild(dt); dl.appendChild(dd);
+      });
+      el.appendChild(dl);
+      box.appendChild(el);
+    });
+  }
+
+  function refreshMonths() {
+    return fetch('/api/pv/months', { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(renderMonths).catch(function () {});
   }
 
   function refreshDay() {
@@ -839,7 +899,7 @@
     if (document.hidden) return;
     var tab = currentTab();
     if (tab === 'oswietlenie') every(refresh, POLL_MS);
-    if (tab === 'pv') { every(refreshPv, PV_POLL_MS); every(refreshDay, DAY_POLL_MS); }
+    if (tab === 'pv') { every(refreshPv, PV_POLL_MS); every(refreshDay, DAY_POLL_MS); every(refreshMonths, DAY_POLL_MS); }
     if (tab === 'ogrzewanie') { every(refreshHeat, HEAT_POLL_MS); timers.push(setInterval(tickHeat, 1000)); }
   }
   document.addEventListener('visibilitychange', schedule);

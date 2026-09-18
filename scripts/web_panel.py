@@ -162,6 +162,8 @@ def make_handler(panel, web_dir, energy=None, heat=None):
                 self._pv(energy.snapshot() if energy else None)
             elif self.path == '/api/pv/day':
                 self._pv(energy.day() if energy else None)
+            elif self.path == '/api/pv/months':
+                self._pv(energy.months() if energy else None)
             elif self.path == '/api/heat':
                 self._heat(None)
             elif self.path in STATIC:

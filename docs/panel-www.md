@@ -25,6 +25,8 @@ Strona otwiera się wtedy jak aplikacja, na pełnym ekranie, jako „Dżarwis”
 - **Moc na fazach** (L1–L3): zużycie domu i pobór/oddawanie z sieci na każdej fazie, napięcie i prąd. Falownik jest jednofazowy, na **L1** (`INVERTER_PHASE` w `energia.py`) — tam dom = sieć + produkcja, na L2/L3 dom = sieć.
 - **Wykres dnia** (00:00–24:00): produkcja — pomarańczowe pole, zużycie domu — niebieska linia. Dotknięcie / najechanie pokazuje godzinę i obie wartości. Przerwa w linii = brak danych (np. restart Pi).
 - **Bilans dnia:** produkcja / pobrano / oddano / zużycie domu [kWh], autokonsumpcja (jaka część produkcji została w domu). Wszystkie wartości za ten sam okres — od pierwszego odczytu po północy; jeśli dane zaczęły się później (np. po restarcie Pi bez wcześniejszych danych), obok tytułu jest „od HH:MM”, a produkcja w bilansie może być mniejsza niż w kafelku „Produkcja dziś” (ten jest zawsze od północy, z falownika).
+- **Łącznie od …** i **Miesiące** (od najnowszego): pobrano / oddano (zbilansowane), produkcja (różnica stanów licznika falownika), zużycie domu (= produkcja + pobrano − oddano), autokonsumpcja. Dane od 2026-09-18; pierwszy miesiąc oznaczony „od DD.MM”.
+- **Pobór i oddanie są zbilansowane po fazach** — jak licznik zakładu energetycznego (w Polsce zwykle sumuje fazy): co 5 s moc łączna z licznika × czas od poprzedniego odczytu, dodatnia → pobór, ujemna → oddanie (przerwy > 30 s pomijane). Licznik SDM630 liczy każdą fazę osobno — przy falowniku na L1 zawyża pobór i oddanie; jego stany są w karcie Falownik z dopiskiem „po fazach”. Dotyczy też bilansu dnia.
 - **Stringi PV** i **Falownik** (status, temperatura, częstotliwość, kody błędów, liczniki łączne).
 - Żółty pasek „Falownik nie odpowiada — w nocy to normalne”: falownik jest zasilany z paneli i w nocy się wyłącza. Produkcja = 0, reszta działa.
 - Czerwony pasek „Brak połączenia z licznikiem energii”: bramka 192.168.8.40 lub licznik nie odpowiada.
@@ -92,6 +94,7 @@ Serwer wydaje tylko pliki z listy `STATIC` w `web_panel.py` — nic innego z dys
 | `POST /api/heat/pumps` | `{"co_min": 0..120, "kol_min": 0..120}` | stan pompy |
 | `POST /api/heat/pumps/stop` | — | stan pompy |
 | `POST /api/heat/manual` | `{"hours": 0.5..8}` | stan pompy |
+| `GET /api/pv/months` | — | `{"since": ts, "totals": {...}, "months": [{"month": "2026-09", "from_day": 18, "import_kwh", "export_kwh", "pv_kwh", "home_kwh", "self_use_pct"}, …]}` |
 | `GET /api/pv/day` | — | `{"date": "2026-09-18", "points": [[ts, pv_w, home_w], …]}` — dzisiejsze minuty |
 
 `on` to **docelowy stan**, nie „przełącz” — powtórzone żądanie niczego nie psuje, a zapis do WAGO jest wykonywany tylko wtedy, gdy stan się zmienia.

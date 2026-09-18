@@ -64,6 +64,8 @@ class FakeKotek:
         if cmd == 'odczytczujnikow':
             return CZUJNIKI
         if cmd == 'czytajprogram':
+            if args[-1] == 'S':
+                return 'Program nr ........... 17\nOpis ................. brak\n'
             return PROGRAM_4
         if cmd == 'wykonaneakcje':
             return AKCJE
@@ -98,6 +100,11 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(s['heating_left_s'], 0)
         self.assertEqual(s['energy_kwh'], {'niska': 30887.591, 'wysoka': 1088.216, 'razem': 31975.807})
         self.assertEqual((s['co_on'], s['cwu_on']), (True, False))
+
+    def test_power_minus_one_means_no_measurement(self):
+        # sterownik wysyła -1, gdy brak impulsów licznika energii (pompa stoi) - to nie jest moc
+        s = pompa.parse_status(STATUS.replace('<moc wartosc="0" />', '<moc wartosc="-1" />'))
+        self.assertIsNone(s['power_w'])
 
     def test_status_heating(self):
         s = pompa.parse_status(status_grzanie('01:02:03'))
@@ -192,6 +199,18 @@ class ScheduleTest(unittest.TestCase):
         sch = {i['nr']: i for i in self.hp.snapshot()['schedule']}
         self.assertEqual(sch[4]['status'], 'now')
         self.assertEqual(sch[5]['status'], 'next')
+
+    def test_actions_described(self):
+        # "program 4, akcja 3" zamienione na opis zadania z treści programu
+        a = self.hp.snapshot()['actions']
+        self.assertEqual(a[0], {'kiedy': 'dziś 10:00', 'opis': 'grzanie 10:00–13:00, powrót CO do 24,0 °C',
+                                'program': '4 · 8h', 'ile': 1})
+        self.assertEqual(a[1]['opis'], 'zadanie nr 1 — już usunięte z programu')
+        self.assertEqual(a[1]['program'], 'specjalny (S) · brak')
+        self.assertEqual(a[2]['opis'], 'pompy: kolektor 5 min, CO 5 min')
+        run = next(x for x in a if x['ile'] > 1)
+        self.assertEqual((run['kiedy'], run['ile']), ('dziś 01:17–03:20', 124))
+        self.assertIn(['czytajprogram', 'S'], [strip_opts(c) for c in self.kotek.calls])
 
     def test_activity(self):
         self.assertEqual(self.hp.snapshot()['activity'], 'Awaria: Presostaty lub PWR')

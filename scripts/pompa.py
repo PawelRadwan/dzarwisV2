@@ -70,6 +70,7 @@ def parse_status(xml):
     energy = {('razem' if e.get('taryfa') == 'obie' else e.get('taryfa')): int(e.get('impulsy')) / 1000
               for e in st.find('energia')}   # 1000 imp = 1 kWh
     wl = {e.get('typ'): e.get('stan') == '1' for e in st.find('grzaniewlwyl')}
+    power = int(st.find('moc').get('wartosc'))             # -1 = brak impulsów licznika (pompa stoi), nie moc
     return {
         'clock': '%s %s' % (czas.get('data').split()[0], czas.get('godzina')),
         'state': stan.get('nazwa'),
@@ -82,7 +83,7 @@ def parse_status(xml):
         'pumps': {p.get('id'): p.get('stan') == '1' for p in st.find('pompy')},
         'tariff': st.find('taryfa').get('opis'),
         'energy_kwh': {k: round(v, 3) for k, v in energy.items()},
-        'power_w': int(st.find('moc').get('wartosc')),
+        'power_w': power if power >= 0 else None,
         'co_on': wl.get('co', False),
         'cwu_on': wl.get('cwu', False),
     }
@@ -106,7 +107,7 @@ def _hhmm_add(hhmm, minutes):
 
 
 def describe_action(line):
-    # akcja z czytajprogram: (opis, start, koniec, codzienna); start/koniec 'GG:MM' albo None
+    # akcja z czytajprogram: (opis, start, koniec, codzienna, opis krótki); start/koniec 'GG:MM' albo None
     line = re.sub(r'\s+', ' ', line).strip()
     m = re.match(r'Grzanie (.+?) (\d\d:\d\d) pco= ?([\d.]+) zew=.*?czas= ?(-?\d+)min$', line)
     if m:
@@ -117,22 +118,24 @@ def describe_action(line):
         elif czas > 0:
             start, end = godz, _hhmm_add(godz, czas)
         else:
-            return '%s od %s grzanie do temperatury, powrót CO %s °C' % (dni, godz, pco), godz, None, daily
-        return '%s %s–%s grzanie, powrót CO do %s °C' % (dni, start, end, pco), start, end, daily
+            short = 'grzanie od %s do temperatury, powrót CO %s °C' % (godz, pco)
+            return '%s od %s grzanie do temperatury, powrót CO %s °C' % (dni, godz, pco), godz, None, daily, short
+        short = 'grzanie %s–%s, powrót CO do %s °C' % (start, end, pco)
+        return '%s %s–%s grzanie, powrót CO do %s °C' % (dni, start, end, pco), start, end, daily, short
     m = re.match(r'Pompy (.+?) (\d\d:\d\d) CZ\.KOL="(\d+)" CZ\.CO="(\d+)"$', line)
     if m:
         dni, godz, kol, co = m.groups()
-        text = '%s %s pompy: kolektor %s min, CO %s min' % (dni, godz, kol, co)
-        return text, godz, _hhmm_add(godz, max(int(kol), int(co))), dni == 'codziennie'
-    return line, None, None, False
+        short = 'pompy: kolektor %s min, CO %s min' % (kol, co)
+        return '%s %s %s' % (dni, godz, short), godz, _hhmm_add(godz, max(int(kol), int(co))), dni == 'codziennie', short
+    return line, None, None, False, line
 
 
 def parse_program(text):
     opis = re.search(r'^Opis \.+ (.*)$', text, re.M)
     items = []
     for nr, line in re.findall(r'^AK\. (\d+): (.*)$', text, re.M):
-        desc, start, end, daily = describe_action(line)
-        items.append({'nr': int(nr), 'text': desc, 'start': start, 'end': end, 'daily': daily})
+        desc, start, end, daily, short = describe_action(line)
+        items.append({'nr': int(nr), 'text': desc, 'start': start, 'end': end, 'daily': daily, 'short': short})
     return {'opis': opis.group(1).strip() if opis else '', 'akcje': [i['text'] for i in items], 'items': items}
 
 
@@ -180,6 +183,26 @@ def build_schedule(items, rows, program_nr, ctrl_now, diff_min):
         if daily:
             first = min(daily, key=lambda e: _minutes(e['start']))
             first['tomorrow_in_min'] = int(24 * 60 - cur + _minutes(first['start']))
+    return out
+
+
+def describe_actions(actions, defs, ctrl_now):
+    # ostatnie akcje w zrozumiałej postaci: kiedy, co (z treści programu), który program
+    today = ctrl_now.strftime('%m/%d') if ctrl_now else None
+    yesterday = (ctrl_now - datetime.timedelta(days=1)).strftime('%m/%d') if ctrl_now else None
+    out = []
+    for a in actions:
+        day = 'dziś' if a['data'] == today else 'wczoraj' if a['data'] == yesterday else \
+            '%s.%s' % (a['data'][3:], a['data'][:2])
+        prog = defs.get(a['program'])
+        label = 'specjalny (S)' if a['program'] == 'S' else a['program']
+        item = next((i for i in (prog or {}).get('items', []) if str(i['nr']) == a['akcja']), None)
+        out.append({
+            'kiedy': '%s %s' % (day, a['od'] if a['ile'] == 1 else '%s–%s' % (a['od'], a['do'])),
+            'opis': item['short'] if item else 'zadanie nr %s — już usunięte z programu' % a['akcja'],
+            'program': '%s · %s' % (label, prog['opis']) if prog else label,
+            'ile': a['ile'],
+        })
     return out
 
 
@@ -304,6 +327,8 @@ class HeatPump:
                     'program': parse_program(self._kotek(['czytajprogram', '0'])),
                     'programs': parse_program_list(self._kotek(['listaprogramow'])),
                     'actions_text': self._kotek(['wykonaneakcje']),
+                    # treść wszystkich programów - do opisu ostatnich akcji
+                    'defs': {n: parse_program(self._kotek(['czytajprogram', n])) for n in ('1', '2', '3', '4', 'S')},
                     'at': self.clock(),
                 }
             self.status, self.temps, self.error = status, temps, None
@@ -320,6 +345,7 @@ class HeatPump:
         s = self.status or {}
         diff = None
         schedule = []
+        ctrl_now = None
         actions_text = self.slow.get('actions_text', '')
         if s.get('clock'):
             ctrl = time.mktime(time.strptime(s['clock'], '%Y/%m/%d %H:%M:%S'))
@@ -348,7 +374,7 @@ class HeatPump:
             'clock_diff_min': diff,
             'program': dict(self.slow['program'] or {}, nr=s.get('program')),
             'programs': [p for p in self.slow['programs'] if 1 <= p['nr'] <= 4],    # tylko te da się włączyć
-            'actions': parse_actions(actions_text)[:12],
+            'actions': describe_actions(parse_actions(actions_text)[:12], self.slow.get('defs', {}), ctrl_now),
             'schedule': schedule,
             'activity': activity(s) if s else None,
             'temps': self.temps,

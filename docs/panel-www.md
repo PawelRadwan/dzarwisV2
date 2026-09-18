@@ -21,7 +21,7 @@ Strona otwiera się wtedy jak aplikacja, na pełnym ekranie, jako „Dżarwis”
 
 ## Zakładka PV
 
-- **Kafelki:** produkcja teraz, sieć („Oddawanie ↑” / „Pobór ↓”), zużycie domu (= produkcja + sieć), produkcja dziś.
+- **Kafelki:** produkcja teraz; sieć i dom w jednym kafelku („Oddawanie ↑” / „Pobór ↓” oraz zużycie domu = produkcja + sieć); produkcja dziś (licznik falownika, od północy); pobrano z sieci dziś (zbilansowane, okres jak w bilansie dnia).
 - **Moc na fazach** (L1–L3): zużycie domu i pobór/oddawanie z sieci na każdej fazie, napięcie i prąd. Falownik jest jednofazowy, na **L1** (`INVERTER_PHASE` w `energia.py`) — tam dom = sieć + produkcja, na L2/L3 dom = sieć.
 - **Wykres dnia** (00:00–24:00): produkcja — pomarańczowe pole, zużycie domu — niebieska linia. Dotknięcie / najechanie pokazuje godzinę i obie wartości. Przerwa w linii = brak danych (np. restart Pi).
 - **Bilans dnia:** produkcja / pobrano / oddano / zużycie domu [kWh], autokonsumpcja (jaka część produkcji została w domu). Wszystkie wartości za ten sam okres — od pierwszego odczytu po północy; jeśli dane zaczęły się później (np. po restarcie Pi bez wcześniejszych danych), obok tytułu jest „od HH:MM”, a produkcja w bilansie może być mniejsza niż w kafelku „Produkcja dziś” (ten jest zawsze od północy, z falownika).
@@ -53,7 +53,7 @@ Pompa ciepła (sterownik Quotek `192.168.1.31`) — wyłącznie przez narzędzie
 - **Same pompy obiegowe** (domyślnie 15 min, 1–120): Pompa CO / Pompa kolektora / Obie (`samepompy`), licznik odliczający, „Zatrzymaj pompy” (`samepompy 0 0`).
 - **Program:** wybór 1–4 (`wlaczprogram`, zmiana potwierdzana — sterownik przełącza z opóźnieniem kilku sekund).
 - **Harmonogram aktywnego programu** z linią „Teraz: …” (awaria / grzanie / pracujące pompy / spoczynek) i stanem każdego zadania na dziś: „✓ wykonano GG:MM” (z dziennika sterownika), „trwa”, „następne — za …”, „nie wykonano”; godziny wg zegara sterownika, przy przesunięciu z dopiskiem „u nas ok. GG:MM”. Opis zadań czytelny: „codziennie 03:30–06:00 grzanie…”.
-- Temperatury czujników (bieżąca, min–max 24 h), pompy i wejścia (PWR, HP/LP), grzanie CO/CWU wł./wył., ostatnie akcje (powtórzenia zwinięte, np. „×124”), energia pompy ciepła łącznie [kWh] (1000 impulsów = 1 kWh), zegar sterownika.
+- Temperatury czujników (bieżąca, min–max 24 h), pompy i wejścia (PWR, HP/LP), grzanie CO/CWU wł./wył., ostatnio wykonane zadania z opisem z treści programu (np. „dziś 10:00 — grzanie 10:00–13:00, powrót CO do 24,0 °C · program 4 · 8h”; zadanie usunięte później z programu — opisane wprost; powtórzenia co minutę zwinięte, np. „×124”), pobór mocy pompy („≈ 0 W”, gdy sterownik zgłasza −1 = brak impulsów licznika), energia pompy ciepła łącznie [kWh] (1000 impulsów = 1 kWh), zegar sterownika.
 - **Pompa CWU** — podłączona do przekaźnika sprężarki, bez osobnego sterowania (do zmiany).
 
 Każda akcja wymaga potwierdzenia i trafia do dziennika (`journalctl -u web.service`). Stan „do kiedy” pomp i ręcznego grzania: `data/pompa-stan.json` (wspólny dla telefonów, przetrwa restart). Odczyt co 5 s tylko przy otwartej zakładce (w tle panel czyta sterownik co 5 s zawsze).

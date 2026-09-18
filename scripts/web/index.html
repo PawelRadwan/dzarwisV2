@@ -104,6 +104,8 @@
   .pv-banner.warn { background: var(--warn-bg); color: var(--warn); }
   .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .stat.wide { grid-column: 1 / -1; }
+  .stat.pair .stat-value { font-size: 20px; margin: 2px 0 6px; }       /* dwie wartości w jednym kafelku */
+  .stat.pair .stat-value:last-child { margin-bottom: 0; }
   @media (min-width: 700px) { .stats { grid-template-columns: repeat(4, 1fr); } .stats.three { grid-template-columns: repeat(3, 1fr); }
                               .stat.wide { grid-column: auto; } }
   .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
@@ -211,9 +213,12 @@
     <div class="banner pv-banner" id="pv-banner" role="alert" hidden></div>
     <div class="stats">
       <div class="stat"><span class="stat-label">Produkcja teraz</span><span class="stat-value" id="pv-now">–</span></div>
-      <div class="stat"><span class="stat-label" id="grid-label">Sieć</span><span class="stat-value" id="grid-now">–</span></div>
-      <div class="stat"><span class="stat-label">Zużycie domu</span><span class="stat-value" id="home-now">–</span></div>
+      <div class="stat pair">
+        <span class="stat-label" id="grid-label">Sieć</span><span class="stat-value" id="grid-now">–</span>
+        <span class="stat-label">Zużycie domu</span><span class="stat-value" id="home-now">–</span>
+      </div>
       <div class="stat"><span class="stat-label">Produkcja dziś</span><span class="stat-value" id="pv-today">–</span></div>
+      <div class="stat"><span class="stat-label">Pobrano z sieci dziś</span><span class="stat-value" id="import-today">–</span></div>
     </div>
     <div class="card">
       <h2>Moc na fazach</h2>
@@ -335,7 +340,7 @@
       <ul class="actions-list" id="h-sched"></ul>
     </div>
     <div class="card">
-      <h2>Ostatnie akcje <span>czas sterownika</span></h2>
+      <h2>Ostatnio wykonane <span>czas sterownika</span></h2>
       <ul class="actions-list" id="h-actions"></ul>
     </div>
     <div class="card">
@@ -499,6 +504,7 @@
     }
     setVal('home-now', kw(n.home_w), 'kW');
     setVal('pv-today', t.pv_kwh == null ? null : num(t.pv_kwh, 1), 'kWh');
+    setVal('import-today', t.import_kwh == null ? null : num(t.import_kwh, t.import_kwh < 10 ? 2 : 1), 'kWh');
 
     var kwh = function (v) { return v == null ? null : num(v, 1) + ' kWh'; };
     setText('b-pv', kwh(t.balance_pv_kwh));
@@ -767,7 +773,7 @@
     if (!d.state) return;
 
     setText('h-state', d.state_text);
-    setVal('h-power', d.power_w == null ? null : num(d.power_w, 0), 'W');
+    setVal('h-power', d.power_w == null ? '≈ 0' : num(d.power_w, 0), 'W');   // brak impulsów licznika = pompa nie pobiera
     setText('h-program', d.program.nr + (d.program.opis ? ' · ' + d.program.opis : ''));
 
     var sel = $('h-prog-select');
@@ -830,8 +836,13 @@
     acts.textContent = '';
     d.actions.forEach(function (a) {
       var li = document.createElement('li');
-      li.textContent = a.data + ' ' + (a.ile > 1 ? a.od + '–' + a.do : a.od) + '  program ' + a.program + ', akcja ' + a.akcja;
-      if (a.ile > 1) { var sm = document.createElement('small'); sm.textContent = '  (×' + a.ile + ')'; li.appendChild(sm); }
+      var when = document.createElement('b'); when.textContent = a.kiedy;
+      li.appendChild(when);
+      li.appendChild(document.createTextNode(' — ' + a.opis));
+      var sm = document.createElement('small');
+      sm.textContent = '  program ' + a.program + (a.ile > 1 ? ', powtarzane co minutę ×' + a.ile : '');
+      sm.style.display = 'block';
+      li.appendChild(sm);
       acts.appendChild(li);
     });
 

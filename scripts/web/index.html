@@ -116,8 +116,9 @@
   .card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
   .card h2 { margin: 0; font-size: 16px; }
   .card h2 span { font-weight: 400; font-size: 14px; color: var(--muted); }
-  .day-nav { display: flex; align-items: center; gap: 6px; }
-  .day-nav h2 { min-width: 86px; text-align: center; }
+  .day-nav { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+  .day-nav h2 { min-width: 132px; text-align: center; }
+  .chart-card .legend { width: 100%; justify-content: center; margin-top: 4px; }
   .nav-btn {
     width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg);
     color: var(--text); font: inherit; font-size: 22px; line-height: 1; cursor: pointer; touch-action: manipulation;
@@ -232,11 +233,11 @@
       <h2>Moc na fazach</h2>
       <div class="phases" id="phases"></div>
     </div>
-    <div class="card">
+    <div class="card chart-card">
       <div class="card-head">
         <div class="day-nav">
           <button class="nav-btn" id="day-prev" type="button" aria-label="Poprzedni dzień">‹</button>
-          <h2 id="day-title">Dziś</h2>
+          <h2 id="day-title">–</h2>
           <button class="nav-btn" id="day-next" type="button" aria-label="Następny dzień">›</button>
           <button class="btn day-today" id="day-today" type="button" hidden>Dziś</button>
         </div>
@@ -633,9 +634,9 @@
   function updateDayNav() {
     if (!dayData) return;
     var d = dayData.date, today = dayData.today;
-    var title = d === today ? 'Dziś' : d === shiftDate(today, -1) ? 'Wczoraj' :
-      (function (dt) { return DAYS[dt.getDay()] + ' ' + String(dt.getDate()).padStart(2, '0') + '.' + String(dt.getMonth() + 1).padStart(2, '0'); })(parseDate(d));
-    setText('day-title', title);
+    var dt = parseDate(d);
+    setText('day-title', DAYS[dt.getDay()] + ' ' + String(dt.getDate()).padStart(2, '0') + '.' +
+      String(dt.getMonth() + 1).padStart(2, '0') + '.' + dt.getFullYear());
     $('day-next').disabled = d >= today;
     $('day-prev').disabled = !!dayData.first_date && d <= dayData.first_date;
     $('day-today').hidden = d === today;

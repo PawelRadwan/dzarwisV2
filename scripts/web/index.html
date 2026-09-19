@@ -116,6 +116,14 @@
   .card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
   .card h2 { margin: 0; font-size: 16px; }
   .card h2 span { font-weight: 400; font-size: 14px; color: var(--muted); }
+  .day-nav { display: flex; align-items: center; gap: 6px; }
+  .day-nav h2 { min-width: 86px; text-align: center; }
+  .nav-btn {
+    width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg);
+    color: var(--text); font: inherit; font-size: 22px; line-height: 1; cursor: pointer; touch-action: manipulation;
+  }
+  .nav-btn:disabled { opacity: .3; cursor: default; }
+  .day-today { padding: 6px 10px; font-size: 14px; }
   .legend { display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
   .legend i { display: inline-block; vertical-align: middle; margin-right: 6px; }
   .legend .k-pv { width: 12px; height: 10px; border-radius: 2px; background: var(--pv); }
@@ -226,7 +234,12 @@
     </div>
     <div class="card">
       <div class="card-head">
-        <h2>Dziś</h2>
+        <div class="day-nav">
+          <button class="nav-btn" id="day-prev" type="button" aria-label="Poprzedni dzień">‹</button>
+          <h2 id="day-title">Dziś</h2>
+          <button class="nav-btn" id="day-next" type="button" aria-label="Następny dzień">›</button>
+          <button class="btn day-today" id="day-today" type="button" hidden>Dziś</button>
+        </div>
         <div class="legend"><span><i class="k-pv"></i>Produkcja</span><span><i class="k-home"></i>Zużycie domu</span></div>
       </div>
       <div class="chart" id="chart">
@@ -608,12 +621,42 @@
     }).then(renderMonths).catch(function () {});
   }
 
+  // --- wybór dnia wykresu: null = dziś (odświeżany co minutę) ---
+  var viewDate = null;
+  var DAYS = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'so'];
+  function parseDate(s) { var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function fmtDate(dt) {
+    return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+  }
+  function shiftDate(s, days) { var dt = parseDate(s); dt.setDate(dt.getDate() + days); return fmtDate(dt); }
+
+  function updateDayNav() {
+    if (!dayData) return;
+    var d = dayData.date, today = dayData.today;
+    var title = d === today ? 'Dziś' : d === shiftDate(today, -1) ? 'Wczoraj' :
+      (function (dt) { return DAYS[dt.getDay()] + ' ' + String(dt.getDate()).padStart(2, '0') + '.' + String(dt.getMonth() + 1).padStart(2, '0'); })(parseDate(d));
+    setText('day-title', title);
+    $('day-next').disabled = d >= today;
+    $('day-prev').disabled = !!dayData.first_date && d <= dayData.first_date;
+    $('day-today').hidden = d === today;
+  }
+
   function refreshDay() {
-    return fetch('/api/pv/day', { cache: 'no-store' }).then(function (r) {
+    var url = '/api/pv/day' + (viewDate ? '?date=' + viewDate : '');
+    return fetch(url, { cache: 'no-store' }).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
-    }).then(function (d) { dayData = d; drawChart(); }).catch(function () {});
+    }).then(function (d) { dayData = d; updateDayNav(); drawChart(); }).catch(function () {});
   }
+
+  function goDay(date) {
+    viewDate = !dayData || date >= dayData.today ? null : date;
+    hideHover();
+    refreshDay();
+  }
+  $('day-prev').addEventListener('click', function () { if (dayData) goDay(shiftDate(dayData.date, -1)); });
+  $('day-next').addEventListener('click', function () { if (dayData) goDay(shiftDate(dayData.date, 1)); });
+  $('day-today').addEventListener('click', function () { goDay('9999-12-31'); });
 
   // --- wykres dnia: produkcja (pole) i zużycie domu (linia), jedna oś w kW ---
   var SVG_NS = 'http://www.w3.org/2000/svg';
@@ -671,7 +714,8 @@
     });
 
     if (!pts.length) {
-      el('text', { x: m.l + pw / 2, y: m.t + ph / 2, 'text-anchor': 'middle', class: 'empty' }, svg).textContent = 'Zbieram dane — wykres pojawi się za minutę';
+      el('text', { x: m.l + pw / 2, y: m.t + ph / 2, 'text-anchor': 'middle', class: 'empty' }, svg).textContent =
+        dayData.date === dayData.today ? 'Zbieram dane — wykres pojawi się za minutę' : 'Brak danych z tego dnia';
     }
     segments(pts, 1).forEach(function (seg) {
       var line = seg.map(function (p, i) { return (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ',' + y(p[1]).toFixed(1); }).join('');

@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import threading
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import dzarwis_global_vars as dgv
@@ -156,12 +157,22 @@ def make_handler(panel, web_dir, energy=None, heat=None):
                 self._json(200, data)
 
         def do_GET(self):
+            url = urllib.parse.urlsplit(self.path)
+            path = url.path
+            if path == '/api/pv/day':
+                if not energy:
+                    self._pv(None)
+                    return
+                date = urllib.parse.parse_qs(url.query).get('date', [None])[0]
+                try:
+                    self._pv(energy.day(date))
+                except ValueError as e:
+                    self._json(400, {'error': str(e)})
+                return
             if self.path == '/api/lights':
                 self._api(lambda: None)
             elif self.path == '/api/pv':
                 self._pv(energy.snapshot() if energy else None)
-            elif self.path == '/api/pv/day':
-                self._pv(energy.day() if energy else None)
             elif self.path == '/api/pv/months':
                 self._pv(energy.months() if energy else None)
             elif self.path == '/api/heat':

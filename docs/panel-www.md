@@ -23,7 +23,7 @@ Strona otwiera się wtedy jak aplikacja, na pełnym ekranie, jako „Dżarwis”
 
 - **Kafelki:** produkcja teraz; sieć i dom w jednym kafelku („Oddawanie ↑” / „Pobór ↓” oraz zużycie domu = produkcja + sieć); produkcja dziś (licznik falownika, od północy); pobrano z sieci dziś (zbilansowane, okres jak w bilansie dnia).
 - **Moc na fazach** (L1–L3): zużycie domu i pobór/oddawanie z sieci na każdej fazie, napięcie i prąd. Falownik jest jednofazowy, na **L1** (`INVERTER_PHASE` w `energia.py`) — tam dom = sieć + produkcja, na L2/L3 dom = sieć.
-- **Wykres dnia** (00:00–24:00): produkcja — pomarańczowe pole, zużycie domu — niebieska linia. Dotknięcie / najechanie pokazuje godzinę i obie wartości. Przerwa w linii = brak danych (np. restart Pi).
+- **Wykres dnia** (00:00–24:00) z przewijaniem: strzałki ‹ › zmieniają dzień (od pierwszego dnia z danymi), „Dziś” wraca do bieżącego; tylko dzisiejszy wykres odświeża się co minutę.: produkcja — pomarańczowe pole, zużycie domu — niebieska linia. Dotknięcie / najechanie pokazuje godzinę i obie wartości. Przerwa w linii = brak danych (np. restart Pi).
 - **Bilans dnia:** produkcja / pobrano / oddano / zużycie domu [kWh], autokonsumpcja (jaka część produkcji została w domu). Wszystkie wartości za ten sam okres — od pierwszego odczytu po północy; jeśli dane zaczęły się później (np. po restarcie Pi bez wcześniejszych danych), obok tytułu jest „od HH:MM”, a produkcja w bilansie może być mniejsza niż w kafelku „Produkcja dziś” (ten jest zawsze od północy, z falownika).
 - **Łącznie od …** i **Miesiące** (od najnowszego): pobrano / oddano (zbilansowane), produkcja (moc falownika × czas, tak jak pobór i oddanie), zużycie domu (= produkcja + pobrano − oddano), autokonsumpcja. Dane od 2026-09-18; pierwszy miesiąc oznaczony „od DD.MM”.
 - **Pobór i oddanie są zbilansowane po fazach** — jak licznik zakładu energetycznego (w Polsce zwykle sumuje fazy): co 5 s moc łączna z licznika × czas od poprzedniego odczytu, dodatnia → pobór, ujemna → oddanie (przerwy > 30 s pomijane). Licznik SDM630 liczy każdą fazę osobno — przy falowniku na L1 zawyża pobór i oddanie; jego stany są w karcie Falownik z dopiskiem „po fazach”. Dotyczy też bilansu dnia.
@@ -41,7 +41,7 @@ Wątek w `web_panel.py` (`scripts/energia.py`) co 5 s czyta falownik Growatt (un
 sqlite3 ~/dzarwisV2/data/energia.db "SELECT datetime(ts,'unixepoch','localtime'), pv_w, grid_w, home_w FROM samples ORDER BY ts DESC LIMIT 5"
 ```
 
-Bramka odrzuca odczyt dużych bloków rejestrów (licznik: >54, Growatt: >64), dlatego zapytania są małe.
+Odczyty falownika z mocą AC spoza 0–4000 W są odrzucane (2026-09-19 06:20 przy starcie falownika pojawił się odczyt ~390 MW). Bramka odrzuca odczyt dużych bloków rejestrów (licznik: >54, Growatt: >64), dlatego zapytania są małe.
 
 ## Zakładka Ogrzewanie
 
@@ -95,7 +95,7 @@ Serwer wydaje tylko pliki z listy `STATIC` w `web_panel.py` — nic innego z dys
 | `POST /api/heat/pumps/stop` | — | stan pompy |
 | `POST /api/heat/manual` | `{"hours": 0.5..8}` | stan pompy |
 | `GET /api/pv/months` | — | `{"since": ts, "totals": {...}, "months": [{"month": "2026-09", "from_day": 18, "import_kwh", "export_kwh", "pv_kwh", "home_kwh", "self_use_pct"}, …]}` |
-| `GET /api/pv/day` | — | `{"date": "2026-09-18", "points": [[ts, pv_w, home_w], …]}` — dzisiejsze minuty |
+| `GET /api/pv/day?date=RRRR-MM-DD` | — | `{"date": "2026-09-18", "points": [[ts, pv_w, home_w], …]}` — dzisiejsze minuty |
 
 `on` to **docelowy stan**, nie „przełącz” — powtórzone żądanie niczego nie psuje, a zapis do WAGO jest wykonywany tylko wtedy, gdy stan się zmienia.
 

@@ -201,8 +201,10 @@ class FakeCollector:
     def snapshot(self):
         return self._snapshot
 
-    def day(self):
-        return {'date': '2026-09-18', 'points': [[1789725600, 3500.0, 400.0]]}
+    def day(self, date=None):
+        if date is not None and date != '2026-09-17':
+            raise ValueError('zła data')
+        return {'date': date or '2026-09-18', 'points': [[1789725600, 3500.0, 400.0]]}
 
     def months(self):
         return {'since': 1789725600, 'totals': {'import_kwh': 1.0}, 'months': [{'month': '2026-09'}]}
@@ -237,6 +239,11 @@ class PvHttpTest(unittest.TestCase):
         status, data = self.get('/api/pv/day')
         self.assertEqual(status, 200)
         self.assertEqual(data['points'][0][1], 3500.0)
+
+    def test_pv_day_with_date(self):
+        self.start(FakeCollector({}))
+        self.assertEqual(self.get('/api/pv/day?date=2026-09-17'), (200, {'date': '2026-09-17', 'points': [[1789725600, 3500.0, 400.0]]}))
+        self.assertEqual(self.get('/api/pv/day?date=zla')[0], 400)
 
     def test_pv_months(self):
         self.start(FakeCollector({}))

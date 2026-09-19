@@ -79,6 +79,14 @@ class DecodeTest(unittest.TestCase):
         self.assertEqual([round(v, 2) for v in m['phase_w']], [-3421.03, 166.13, 61.61])
         self.assertEqual([round(v, 2) for v in m['voltages']], [247.54, 244.98, 245.37])
 
+    def test_implausible_inverter_reading_rejected(self):
+        # 2026-09-19 06:20 przy starcie falownika: moc AC ~390 MW -> odczyt odrzucony, nie trafia do bilansów
+        gw = FakeGateway()
+        gw.regs[2][3023], gw.regs[2][3024] = 0x3A2F, 0x1234          # ~97 MW
+        self.assertIsNone(energia.read_growatt(gw))
+        gw.regs[2][3023], gw.regs[2][3024] = 0, 35969                 # 3596.9 W - prawidłowy
+        self.assertIsNotNone(energia.read_growatt(gw))
+
     def test_status_text_unknown(self):
         regs = list(GROWATT_3000)
         regs[0] = 7
@@ -339,6 +347,19 @@ class CollectorTest(unittest.TestCase):
         self.assertAlmostEqual(pv, 3596.9)
         self.assertAlmostEqual(home, 3596.9 - 3200, places=0)
         self.assertEqual(self.col.day()['date'], '2026-09-18')
+
+    def test_day_for_selected_date(self):
+        self.store.add(int(local_ts(12, 0, day=17)), 1000, 0, 1000, 1, 1, 1, 1, 0, 0, 16.7)
+        self.store.add(int(local_ts(13, 0, day=18)), 2000, 0, 2000, 1, 1, 1, 1, 0, 0, 33.3)
+        d = self.col.day('2026-09-17')
+        self.assertEqual(d['date'], '2026-09-17')
+        self.assertEqual([p[1] for p in d['points']], [1000])
+        self.assertEqual(d['first_date'], '2026-09-17')
+        self.assertEqual(d['today'], '2026-09-18')
+        self.assertEqual(self.col.day()['date'], '2026-09-18')
+        for bad in ('2026-13-01', 'wczoraj', '2026-09-18; drop', ''):
+            with self.assertRaises(ValueError):
+                self.col.day(bad)
 
     def test_store_error_does_not_break_live(self):
         self.store.add = lambda *a: (_ for _ in ()).throw(RuntimeError('dysk'))

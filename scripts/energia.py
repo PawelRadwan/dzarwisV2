@@ -4,6 +4,7 @@
 
 import logging
 import os
+import re
 import sqlite3
 import struct
 import threading
@@ -16,6 +17,7 @@ METER_UID = 3
 POLL_INTERVAL = 5       # s, odczyt urządzeń
 MAX_GAP = 30            # s, dłuższa przerwa między odczytami nie jest doliczana do energii
 MODBUS_TIMEOUT = 2      # s
+MAX_AC_W = 4000         # falownik Pmax 3600 VA; większa moc AC = śmieciowy odczyt (np. przy starcie falownika)
 INVERTER_PHASE = 1      # falownik jednofazowy podłączony do L1 (sprawdzone: L1 oddaje tyle, ile produkuje)
 
 STATUS_TEXT = {0: 'Oczekiwanie', 1: 'Praca', 3: 'Awaria'}
@@ -72,7 +74,13 @@ def _read(mb, uid, start, count):
 def read_growatt(mb):
     # None, gdy falownik nie odpowiada (w nocy normalne). Growatt przyjmuje maks. 64 rejestry na zapytanie.
     blocks = [_read(mb, GROWATT_UID, 3000, 60), _read(mb, GROWATT_UID, 3093, 1), _read(mb, GROWATT_UID, 3105, 2)]
-    return None if None in blocks else decode_growatt(*blocks)
+    if None in blocks:
+        return None
+    g = decode_growatt(*blocks)
+    if not 0 <= g['ac_w'] <= MAX_AC_W:
+        log.warning('falownik: odrzucony nierealny odczyt mocy AC %.0f W', g['ac_w'])
+        return None
+    return g
 
 
 def read_meter(mb):
@@ -136,6 +144,10 @@ class EnergyStore:
     def day_points(self, start, end):
         return [list(row) for row in self._query(
             'SELECT ts, pv_w, home_w FROM samples WHERE ts >= ? AND ts < ? ORDER BY ts', (start, end))]
+
+    def first_ts(self):
+        row = self._query('SELECT MIN(ts) FROM samples', ())
+        return row[0][0] if row else None
 
     def first_meter_sample(self, start, end):
         # (ts, import_kwh, export_kwh, pv_today_kwh) - początek okresu bilansu dnia
@@ -314,11 +326,21 @@ class Collector:
             s['self_use_pct'] = round(min(max((pv - exp) / pv * 100, 0), 100))
         return s
 
-    def day(self):
+    def day(self, date=None):
+        # minuty wybranego dnia (RRRR-MM-DD, domyślnie dziś); ValueError przy złej dacie
         now = self.clock()
-        start, end = day_bounds(now)
+        if date is None:
+            ts = now
+        else:
+            if not isinstance(date, str) or not re.fullmatch(r'\d{4}-\d\d-\d\d', date):
+                raise ValueError('data musi mieć postać RRRR-MM-DD')
+            ts = time.mktime(time.strptime(date + ' 12', '%Y-%m-%d %H'))   # strptime: ValueError przy złej dacie
+        start, end = day_bounds(ts)
         points = self._store_call(self.store.day_points, start, end) or []
-        return {'date': time.strftime('%Y-%m-%d', time.localtime(now)), 'points': points}
+        first = self._store_call(self.store.first_ts)
+        return {'date': time.strftime('%Y-%m-%d', time.localtime(ts)), 'points': points,
+                'today': time.strftime('%Y-%m-%d', time.localtime(now)),
+                'first_date': time.strftime('%Y-%m-%d', time.localtime(first)) if first else None}
 
     def run(self):
         while True:

@@ -254,11 +254,7 @@ class Collector:
         today = {'pv_kwh': pv_today, 'balance_pv_kwh': None, 'import_kwh': None, 'export_kwh': None,
                  'home_kwh': None, 'self_use_pct': None, 'since': None}
         if m:
-            # bilans dnia: zapisane minuty + bieżąca minuta, wszystko moc x czas (jak w podsumowaniach)
-            stored = self._store_call(self.store.balanced_sum, day_start, day_end) or (0, 0, 0)
-            cur = self._bucket if self._bucket['ts'] >= day_start else {'imp_wh': 0, 'exp_wh': 0, 'pv_wh': 0}
-            s = self._summary((stored[0] + cur['imp_wh']) / 1000, (stored[1] + cur['exp_wh']) / 1000,
-                              (stored[2] + cur['pv_wh']) / 1000)
+            s = self.balance(day_start, day_end)
             today.update(balance_pv_kwh=s['pv_kwh'], import_kwh=s['import_kwh'], export_kwh=s['export_kwh'],
                          home_kwh=s['home_kwh'], self_use_pct=s['self_use_pct'], since=self._first[1])
 
@@ -340,7 +336,18 @@ class Collector:
         first = self._store_call(self.store.first_ts)
         return {'date': time.strftime('%Y-%m-%d', time.localtime(ts)), 'points': points,
                 'today': time.strftime('%Y-%m-%d', time.localtime(now)),
-                'first_date': time.strftime('%Y-%m-%d', time.localtime(first)) if first else None}
+                'first_date': time.strftime('%Y-%m-%d', time.localtime(first)) if first else None,
+                'balance': self.balance(start, end)}
+
+    def balance(self, day_start, day_end):
+        # bilans doby: zapisane minuty + bieżąca minuta, gdy należy do tej doby
+        stored = self._store_call(self.store.balanced_sum, day_start, day_end) or (0, 0, 0)
+        b = self._bucket
+        cur = b if b and b['meter'] and day_start <= b['ts'] < day_end else {'imp_wh': 0, 'exp_wh': 0, 'pv_wh': 0}
+        first = self._store_call(self.store.first_meter_sample, day_start, day_end)
+        since = first[0] if first else (b['ts'] if cur is b else None)
+        return self._summary((stored[0] + cur['imp_wh']) / 1000, (stored[1] + cur['exp_wh']) / 1000,
+                             (stored[2] + cur['pv_wh']) / 1000, since=since)
 
     def run(self):
         while True:

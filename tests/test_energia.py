@@ -361,6 +361,25 @@ class CollectorTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.col.day(bad)
 
+    def test_day_has_balance(self):
+        # bilans wybranego dnia - ten sam zestaw wartości co bilans dnia bieżącego
+        self.store.add(int(local_ts(12, 0, day=17)), 1000, -500, 500, None, None, None, None, 0.0, 100.0, 300.0)
+        self.store.add(int(local_ts(12, 1, day=17)), 1000, 200, 1200, None, None, None, None, 50.0, 0.0, 200.0)
+        b = self.col.day('2026-09-17')['balance']
+        self.assertAlmostEqual(b['pv_kwh'], 0.5)
+        self.assertAlmostEqual(b['import_kwh'], 0.05)
+        self.assertAlmostEqual(b['export_kwh'], 0.1)
+        self.assertAlmostEqual(b['home_kwh'], 0.45)
+        self.assertEqual(b['self_use_pct'], 80)
+        self.assertEqual(b['since'], int(local_ts(12, 0, day=17)))
+
+    def test_today_balance_includes_current_minute(self):
+        self.polls(local_ts(12, 0), -1000, 3)
+        d = self.col.snapshot()['today']
+        b = self.col.day()['balance']
+        for k in ('pv_kwh', 'import_kwh', 'export_kwh', 'home_kwh'):
+            self.assertAlmostEqual(b[k], d['balance_pv_kwh'] if k == 'pv_kwh' else d[k], places=3)
+
     def test_store_error_does_not_break_live(self):
         self.store.add = lambda *a: (_ for _ in ()).throw(RuntimeError('dysk'))
         self.col.poll()

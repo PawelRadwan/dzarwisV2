@@ -520,14 +520,8 @@
     setVal('pv-today', t.pv_kwh == null ? null : num(t.pv_kwh, 1), 'kWh');
     setVal('import-today', t.import_kwh == null ? null : num(t.import_kwh, t.import_kwh < 10 ? 2 : 1), 'kWh');
 
-    var kwh = function (v) { return v == null ? null : num(v, 1) + ' kWh'; };
-    setText('b-pv', kwh(t.balance_pv_kwh));
-    setText('b-import', kwh(t.import_kwh));
-    setText('b-export', kwh(t.export_kwh));
-    setText('b-home', kwh(t.home_kwh));
-    setText('b-self', t.self_use_pct == null ? null : t.self_use_pct + '%');
-    var midnight = new Date(); midnight.setHours(0, 5, 0, 0);
-    setText('since', t.since && t.since * 1000 > midnight.getTime() ? 'od ' + hhmm(t.since) : '');
+    if (!viewDate) renderBalance({ pv_kwh: t.balance_pv_kwh, import_kwh: t.import_kwh, export_kwh: t.export_kwh,
+                                   home_kwh: t.home_kwh, self_use_pct: t.self_use_pct, since: t.since }, '');
 
     // moc na fazach: dom i sieć; falownik jednofazowy - jego faza oznaczona
     var ph = $('phases');
@@ -572,6 +566,22 @@
     setText('t-pv', total(tot.pv_kwh));
     setText('t-import', total(tot.import_kwh));
     setText('t-export', total(tot.export_kwh));
+  }
+
+  // bilans dnia: bieżący albo wybranego strzałkami dnia
+  function renderBalance(b, dateText) {
+    var kwh = function (v) { return v == null ? null : num(v, 1) + ' kWh'; };
+    setText('b-pv', kwh(b.pv_kwh));
+    setText('b-import', kwh(b.import_kwh));
+    setText('b-export', kwh(b.export_kwh));
+    setText('b-home', kwh(b.home_kwh));
+    setText('b-self', b.self_use_pct == null ? null : b.self_use_pct + '%');
+    var note = dateText;
+    if (b.since) {
+      var since = new Date(b.since * 1000), start = new Date(since); start.setHours(0, 5, 0, 0);
+      if (since > start) note += (note ? ', ' : '') + 'od ' + hhmm(b.since);
+    }
+    setText('since', note);
   }
 
   function refreshPv() {
@@ -623,7 +633,7 @@
   }
 
   // --- wybór dnia wykresu: null = dziś (odświeżany co minutę) ---
-  var viewDate = null;
+  var viewDate = null, dayReq = 0;   // numer zapytania - spóźnione odpowiedzi są odrzucane
   var DAYS = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'so'];
   function parseDate(s) { var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
   function fmtDate(dt) {
@@ -644,10 +654,17 @@
 
   function refreshDay() {
     var url = '/api/pv/day' + (viewDate ? '?date=' + viewDate : '');
+    var req = ++dayReq;
     return fetch(url, { cache: 'no-store' }).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
-    }).then(function (d) { dayData = d; updateDayNav(); drawChart(); }).catch(function () {});
+    }).then(function (d) {
+      if (req !== dayReq) return;                 // w międzyczasie zmieniono dzień
+      dayData = d;
+      updateDayNav();
+      drawChart();
+      if (viewDate) renderBalance(d.balance, $('day-title').textContent);
+    }).catch(function () {});
   }
 
   function goDay(date) {

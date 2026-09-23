@@ -252,26 +252,35 @@ def parse_actions(text):
     return out
 
 
+DAYS = ['PN', 'WT', 'SR', 'CZ', 'PI', 'SO', 'ND']
+
+
 def manual_heating_program(ctrl_date, ctrl_time, minutes):
-    # program S z jednorazową akcją grzania (data!) na najbliższą minutę zegara sterownika.
-    # UWAGA: kotek zapisuje lata 2016-2031 o 16 za dużo (2026 -> 2042), a rok dwucyfrowy odrzuca
-    # zostawiając akcję "codziennie 00:00" - dlatego po wgraniu check_manual_program
+    # program S z akcją grzania na najbliższą minutę zegara sterownika, w dniu tygodnia startu.
+    # Nie data=: kotek zapisuje lata 2016-2031 o 16 za dużo (2026 -> 2042) i akcja się nie wykona.
+    # Akcja z dniem powtarzałaby się co tydzień - panel czyści S po końcu grzania (_expire_manual).
     now = datetime.datetime.strptime('%s %s' % (ctrl_date, ctrl_time), '%Y/%m/%d %H:%M:%S')
     start = now.replace(second=0) + datetime.timedelta(minutes=2 if now.second >= 45 else 1)
     xml = ('<pompa CfgVer="1.0"><program numer="S" opis="reczne grzanie">'
-           '<akcja data="%s" czas="%s"><grzanie czas="%d"/></akcja></program></pompa>\n'
-           % (start.strftime('%Y/%m/%d'), start.strftime('%H:%M'), minutes))
+           '<akcja dni="%s" czas="%s"><grzanie czas="%d"/></akcja></program></pompa>\n'
+           % (DAYS[start.weekday()], start.strftime('%H:%M'), minutes))
     return xml, start.strftime('%Y/%m/%d %H:%M')
 
 
 def check_manual_program(text, start):
-    # czy sterownik zapisał akcję ręcznego grzania z datą i godziną startu ('RRRR/MM/DD GG:MM')
-    m = re.search(r'Grzanie (\d{4}/\d\d/\d\d) +(\d?\d:\d\d)', text)
+    # czy sterownik zapisał akcję ręcznego grzania w dniu tygodnia i o godzinie startu ('RRRR/MM/DD GG:MM');
+    # kotek wypisuje dni jako maskę, np. "..S...." = środa
+    m = re.search(r'Grzanie ([.A-Z]{7}) +(\d?\d:\d\d)', text)
     if not m:
-        raise KotekError('sterownik nie zapisał ręcznego grzania w programie S')
-    saved = '%s %s' % (m.group(1), m.group(2).rjust(5, '0'))
-    if saved != start:
-        raise KotekError('sterownik zapisał ręczne grzanie na %s zamiast %s - pompa nie ruszy' % (saved, start))
+        other = re.search(r'Grzanie +(\S+ +\d?\d:\d\d)', text)
+        raise KotekError('sterownik zapisał ręczne grzanie jako "%s" - pompa nie ruszy' % other.group(1) if other
+                         else 'sterownik nie zapisał ręcznego grzania w programie S - pompa nie ruszy')
+    day = datetime.datetime.strptime(start, '%Y/%m/%d %H:%M').weekday()
+    mask = ''.join('X' if i == day else '.' for i in range(7))
+    saved = (''.join('.' if c == '.' else 'X' for c in m.group(1)), m.group(2).rjust(5, '0'))
+    if saved != (mask, start[-5:]):
+        raise KotekError('sterownik zapisał ręczne grzanie jako %s %s zamiast %s %s - pompa nie ruszy'
+                         % (m.group(1), saved[1], DAYS[day], start[-5:]))
 
 
 EMPTY_PROGRAM_S = '<pompa CfgVer="1.0"><program numer="S" opis="brak"></program></pompa>\n'
@@ -327,7 +336,8 @@ class HeatPump:
             if self.manual[key] and self.manual[key] <= now:
                 self.manual[key] = None
                 changed = True
-        if self.manual['heating_until'] and self.manual['heating_until'] <= now:
+        # akcja z dniem tygodnia - bez wyczyszczenia S grzałaby znów za tydzień; przy błędzie ponowi przy odczycie
+        if self.manual['heating_until'] and self.manual['heating_until'] <= now and self._clear_program_s():
             self.manual.update(heating_start=None, heating_start_ts=None, heating_until=None)
             changed = True
         if changed:
@@ -460,12 +470,16 @@ class HeatPump:
 
     def _clear_program_s(self):
         path = os.path.join(self.data_dir, 'pompa-S-pusty.xml')
-        with open(path, 'w') as f:
-            f.write(EMPTY_PROGRAM_S)
         try:
+            os.makedirs(self.data_dir, exist_ok=True)
+            with open(path, 'w') as f:
+                f.write(EMPTY_PROGRAM_S)
             self._kotek(['program', path])
-        except KotekError as e:
+        except (KotekError, OSError) as e:
             log.error('czyszczenie programu S: %s', e)
+            return False
+        log.info('program S wyczyszczony')
+        return True
 
     def run(self):
         while True:

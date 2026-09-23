@@ -55,7 +55,7 @@ class FakeKotek:
         self.active = 3
         self.program_files = []
         self.program_s = 'Program nr ........... 17\nOpis ................. brak\n'
-        self.year_shift = lambda y: y          # prawdziwy kotek: lata 2016-2031 +16
+        self.saved_days = None                 # np. 'codziennie' - kotek zapisał inaczej, niż wysłano
 
     def __call__(self, args):
         self.calls.append(list(args))
@@ -84,11 +84,14 @@ class FakeKotek:
         if cmd == 'program':
             with open(args[-1]) as f:
                 self.program_files.append(f.read())
-            m = re.search(r'data="(\d+)/(\d\d)/(\d\d)" czas="(\d\d:\d\d)"><grzanie czas="(\d+)"', self.program_files[-1])
+            # wydruk jak z prawdziwego czytajprogram: dni jako maska, np. "..S...." = środa
+            m = re.search(r'dni="(\w\w)" czas="(\d\d:\d\d)"><grzanie czas="(\d+)"', self.program_files[-1])
             if m:
+                i = pompa.DAYS.index(m.group(1))
+                mask = ''.join(d[0] if n == i else '.' for n, d in enumerate(pompa.DAYS))
                 self.program_s = ('Program nr ........... 17\nOpis ................. reczne grzanie\n'
-                                  'AK. 1: Grzanie %d/%s/%s %s pco= zew= czas= %smin\n'
-                                  % (self.year_shift(int(m.group(1))), m.group(2), m.group(3), m.group(4), m.group(5)))
+                                  'AK. 1: Grzanie %s    %s pco=      zew=      czas= %smin \r\n'
+                                  % (self.saved_days or mask, m.group(2), m.group(3)))
             elif 'numer="S" opis="brak"' in self.program_files[-1]:
                 self.program_s = 'Program nr ........... 17\nOpis ................. brak\n'
             return ''
@@ -237,27 +240,33 @@ class ScheduleTest(unittest.TestCase):
 
 
 class ManualProgramTest(unittest.TestCase):
-    def test_program_s_one_time_action(self):
-        xml, start = pompa.manual_heating_program('2026/09/18', '13:03:57', 60)
+    def test_program_s_day_of_week(self):
+        xml, start = pompa.manual_heating_program('2026/09/18', '13:03:57', 60)     # piątek
         self.assertEqual(start, '2026/09/18 13:05')      # sekundy >= 45 -> +2 min
         self.assertIn('<program numer="S"', xml)
-        self.assertIn('<akcja data="2026/09/18" czas="13:05"><grzanie czas="60"/></akcja>', xml)
+        self.assertIn('<akcja dni="PI" czas="13:05"><grzanie czas="60"/></akcja>', xml)
+        self.assertNotIn('data=', xml)                   # kotek psuje rok 2016-2031
 
     def test_program_s_early_seconds(self):
         self.assertEqual(pompa.manual_heating_program('2026/09/18', '13:03:10', 30)[1], '2026/09/18 13:04')
 
     def test_program_s_over_midnight(self):
-        xml, start = pompa.manual_heating_program('2026/12/31', '23:59:50', 90)
-        self.assertEqual(start, '2027/01/01 00:01')
-        self.assertIn('data="2027/01/01" czas="00:01"', xml)
+        xml, start = pompa.manual_heating_program('2026/09/20', '23:59:50', 90)   # niedziela -> poniedziałek
+        self.assertEqual(start, '2026/09/21 00:01')
+        self.assertIn('dni="PN" czas="00:01"', xml)
 
     def test_check_saved_program(self):
-        pompa.check_manual_program('AK. 1: Grzanie 2026/09/23 11:02 pco= zew= czas= 60min\n', '2026/09/23 11:02')
-        pompa.check_manual_program('AK. 1: Grzanie 2026/09/23  9:02 pco= zew= czas= 60min\n', '2026/09/23 09:02')
+        text = 'AK. 1: Grzanie ..S....    11:02 pco=      zew=      czas= 60min \r\n'
+        pompa.check_manual_program(text, '2026/09/23 11:02')
+        pompa.check_manual_program(text.replace('11:02', ' 9:02'), '2026/09/23 09:02')
 
-    def test_check_saved_program_wrong_year(self):
-        with self.assertRaisesRegex(pompa.KotekError, '2042/09/23 11:02 zamiast 2026/09/23 11:02'):
-            pompa.check_manual_program('AK. 1: Grzanie 2042/09/23 11:02 pco= zew= czas= 60min\n', '2026/09/23 11:02')
+    def test_check_saved_program_wrong(self):
+        with self.assertRaisesRegex(pompa.KotekError, r'\.\.\.C\.\.\. 11:02 zamiast SR 11:02'):
+            pompa.check_manual_program('AK. 1: Grzanie ...C...    11:02 pco= zew= czas= 60min\n', '2026/09/23 11:02')
+        with self.assertRaises(pompa.KotekError):         # inna godzina
+            pompa.check_manual_program('AK. 1: Grzanie ..S....    11:03 pco= zew= czas= 60min\n', '2026/09/23 11:02')
+        with self.assertRaises(pompa.KotekError):         # "codziennie" - po odrzuconej dacie
+            pompa.check_manual_program('AK. 1: Grzanie codziennie 00:00 pco= zew= czas= 60min\n', '2026/09/23 11:02')
         with self.assertRaises(pompa.KotekError):
             pompa.check_manual_program('Program nr ........... 17\n', '2026/09/23 11:02')
 
@@ -352,18 +361,43 @@ class HeatPumpTest(unittest.TestCase):
         self.hp.poll(full=True)
         self.hp.manual_heating(1)
         self.assertEqual(len(self.kotek.program_files), 1)
-        self.assertIn('<akcja data="2026/09/18" czas="13:05"><grzanie czas="60"/></akcja>', self.kotek.program_files[0])
+        self.assertIn('<akcja dni="PI" czas="13:05"><grzanie czas="60"/></akcja>', self.kotek.program_files[0])
         m = self.hp.snapshot()['manual']
         self.assertEqual(m['heating_start'], '13:05')
         # start za ~63 s wg zegara sterownika (13:03:57 -> 13:05:00), koniec godzinę później
         self.assertEqual(m['heating_start_ts'], int(self.now + 63))
         self.assertEqual(m['heating_until'], int(self.now + 63 + 3600))
 
-    def test_manual_heating_not_saved(self):
-        # kotek zapisał złą datę (2026 -> 2042) - błąd, program S wyczyszczony, bez udawania grzania
-        self.kotek.year_shift = lambda y: y + 16 if 2016 <= y <= 2031 else y
+    def test_manual_heating_program_s_cleared_after_end(self):
+        # akcja z dniem tygodnia - po końcu grzania S wyczyszczony, żeby nie grzało za tydzień
         self.hp.poll(full=True)
-        with self.assertRaisesRegex(pompa.KotekError, '2042/09/18 13:05 zamiast 2026/09/18 13:05'):
+        self.hp.manual_heating(1)
+        self.now += 30 * 60
+        self.hp.poll()
+        self.assertIn('AK.', self.kotek.program_s)          # w trakcie grzania S zostaje
+        self.now += 40 * 60
+        self.hp.poll()
+        self.assertNotIn('AK.', self.kotek.program_s)
+        self.assertIsNone(self.hp.snapshot()['manual']['heating_until'])
+
+    def test_manual_heating_clear_retried(self):
+        # brak łączności przy końcu grzania - stan zostaje, czyszczenie przy kolejnym odczycie
+        self.hp.poll(full=True)
+        self.hp.manual_heating(1)
+        self.now += 2 * 3600
+        self.kotek.fail = True
+        self.hp.poll()
+        self.assertIsNotNone(self.hp.manual['heating_until'])
+        self.kotek.fail = False
+        self.hp.poll()
+        self.assertNotIn('AK.', self.kotek.program_s)
+        self.assertIsNone(self.hp.manual['heating_until'])
+
+    def test_manual_heating_not_saved(self):
+        # kotek zapisał akcję inaczej (np. "codziennie") - błąd, program S wyczyszczony, bez udawania grzania
+        self.kotek.saved_days = 'codziennie'
+        self.hp.poll(full=True)
+        with self.assertRaisesRegex(pompa.KotekError, 'pompa nie ruszy'):
             self.hp.manual_heating(1)
         self.assertIn('numer="S" opis="brak"', self.kotek.program_files[-1])
         self.assertNotIn('AK.', self.kotek.program_s)

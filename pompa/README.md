@@ -30,4 +30,4 @@ Przywrócenie oryginalnego programu 3 lub S: `kotek_rpi --adres 192.168.1.31 pro
 
 - `wlaczprogram` działa z opóźnieniem kilku sekund — `aktprogram` zaraz po nim może jeszcze pokazać poprzedni program. `kotek` wypisuje numer wewnętrzny liczony od zera (`programNr=2` = program 3).
 - Programy wykonują się wg **zegara sterownika**. Nie zmienia sam czasu letni/zimowy — poprawić po każdej zmianie czasu (polecenie w [docs/pompa-ciepla.md](../docs/pompa-ciepla.md#pułapki)).
-- Akcja z samą godziną (`<akcja czas="08:21">`) wykonuje się **codziennie**; jednorazowa wymaga `data="RRRR/MM/DD"`.
+- Akcja z samą godziną (`<akcja czas="08:21">`) wykonuje się **codziennie**; jednorazowa wymaga `data="RR/MM/DD"` — rok **dwucyfrowo**, pełny rok sterownik zapisuje błędnie (2026 → 2042, [pompa-ciepla.md](../docs/pompa-ciepla.md#pułapki)).

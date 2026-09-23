@@ -253,13 +253,25 @@ def parse_actions(text):
 
 
 def manual_heating_program(ctrl_date, ctrl_time, minutes):
-    # program S z jednorazową akcją grzania (data!) na najbliższą minutę zegara sterownika
+    # program S z jednorazową akcją grzania (data!) na najbliższą minutę zegara sterownika.
+    # Rok dwucyfrowo: sterownik trzyma rok na 6 bitach od 2000, a kotek wpisuje go bez odjęcia 2000
+    # ("2026" zapisało się jako 2026 % 64 = 42, czyli 2042 - akcja nigdy się nie wykonała)
     now = datetime.datetime.strptime('%s %s' % (ctrl_date, ctrl_time), '%Y/%m/%d %H:%M:%S')
     start = now.replace(second=0) + datetime.timedelta(minutes=2 if now.second >= 45 else 1)
     xml = ('<pompa CfgVer="1.0"><program numer="S" opis="reczne grzanie">'
            '<akcja data="%s" czas="%s"><grzanie czas="%d"/></akcja></program></pompa>\n'
-           % (start.strftime('%Y/%m/%d'), start.strftime('%H:%M'), minutes))
+           % (start.strftime('%y/%m/%d'), start.strftime('%H:%M'), minutes))
     return xml, start.strftime('%Y/%m/%d %H:%M')
+
+
+def check_manual_program(text, start):
+    # czy sterownik zapisał akcję ręcznego grzania z datą i godziną startu ('RRRR/MM/DD GG:MM')
+    m = re.search(r'Grzanie (\d{4}/\d\d/\d\d) +(\d?\d:\d\d)', text)
+    if not m:
+        raise KotekError('sterownik nie zapisał ręcznego grzania w programie S')
+    saved = '%s %s' % (m.group(1), m.group(2).rjust(5, '0'))
+    if saved != start:
+        raise KotekError('sterownik zapisał ręczne grzanie na %s zamiast %s - pompa nie ruszy' % (saved, start))
 
 
 def _is_int(v):
@@ -431,6 +443,7 @@ class HeatPump:
         with open(path, 'w') as f:
             f.write(xml)
         self._kotek(['program', path])
+        check_manual_program(self._kotek(['czytajprogram', 'S']), start)
         start_ts = int(self.clock() + (datetime.datetime.strptime(start, '%Y/%m/%d %H:%M') - ctrl).total_seconds())
         self.manual.update(heating_start=start[-5:], heating_start_ts=start_ts,
                            heating_until=start_ts + minutes * 60)

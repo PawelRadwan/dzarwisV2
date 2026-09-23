@@ -121,6 +121,7 @@ Pełny opis jest w komentarzu na początku każdego pliku z `czytajprogram -x` (
 
 ## Pułapki
 
+- **Rok w `data` podawaj dwucyfrowo (`26/09/23`).** Sterownik trzyma rok na 6 bitach jako lata od 2000, a `kotek_rpi` wpisuje podaną liczbę bez odejmowania 2000: `data="2026/09/23"` zapisało się 2026-09-23 jako **2042**/09/23 (2026 mod 64 = 42) i ręczne grzanie z panelu się nie wykonało. Panel wysyła rok dwucyfrowo i po wgraniu sprawdza `czytajprogram S`.
 - **Akcja bez `data` wykonuje się codziennie.** Ręczny start wgrany jako `<akcja czas="08:21">` w programie S grzał codziennie od stycznia do 2026-09-18.
 - **Zegar sterownika** nie zmienia sam czasu letni/zimowy. 2026-09-18 spóźniał się 62 min — ustawiony na czas Pi (`ustrtc 2026/09/18-14:58:24-PI`). **Po zmianie czasu (ostatnia niedziela października i marca) trzeba go poprawić** — panel pokazuje żółte ostrzeżenie, gdy różnica przekracza 5 min. Polecenie na Pi:
   `~/dzarwisV2/kotek_rpi --adres 192.168.1.31 ustrtc "$(date +%Y/%m/%d-%H:%M:%S)-$(python3 -c 'import time;print(["PN","WT","SR","CZ","PI","SO","ND"][time.localtime().tm_wday])')"`

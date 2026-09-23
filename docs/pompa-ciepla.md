@@ -121,7 +121,7 @@ Pełny opis jest w komentarzu na początku każdego pliku z `czytajprogram -x` (
 
 ## Pułapki
 
-- **Rok w `data` podawaj dwucyfrowo (`26/09/23`).** Sterownik trzyma rok na 6 bitach jako lata od 2000, a `kotek_rpi` wpisuje podaną liczbę bez odejmowania 2000: `data="2026/09/23"` zapisało się 2026-09-23 jako **2042**/09/23 (2026 mod 64 = 42) i ręczne grzanie z panelu się nie wykonało. Panel wysyła rok dwucyfrowo i po wgraniu sprawdza `czytajprogram S`.
+- **Jednorazowe akcje (`data=`) w latach 2016–2031 nie działają — błąd `kotek_rpi`.** Kotek zapisuje rok z tego zakresu o 16 za duży (sprawdzone 2026-09-23 na akcji `pompy` 0 min dla lat 2010–2045: 2010–2015 i 2032–2045 poprawnie, 2016→2032 … 2026→2042 … 2031→2047). Żaden wpis nie daje w sterowniku roku 2026. Rok dwucyfrowy albo < 2010 kotek odrzuca (`Niepoprawna data w akcji`), **ale mimo to wgrywa akcję jako `codziennie 00:00`** — po każdym błędzie trzeba wgrać pusty program S. Ręczne grzanie z panelu (akcja z datą) z tego powodu się nie wykonuje; panel sprawdza zapisany program S, zgłasza błąd i czyści S.
 - **Akcja bez `data` wykonuje się codziennie.** Ręczny start wgrany jako `<akcja czas="08:21">` w programie S grzał codziennie od stycznia do 2026-09-18.
 - **Zegar sterownika** nie zmienia sam czasu letni/zimowy. 2026-09-18 spóźniał się 62 min — ustawiony na czas Pi (`ustrtc 2026/09/18-14:58:24-PI`). **Po zmianie czasu (ostatnia niedziela października i marca) trzeba go poprawić** — panel pokazuje żółte ostrzeżenie, gdy różnica przekracza 5 min. Polecenie na Pi:
   `~/dzarwisV2/kotek_rpi --adres 192.168.1.31 ustrtc "$(date +%Y/%m/%d-%H:%M:%S)-$(python3 -c 'import time;print(["PN","WT","SR","CZ","PI","SO","ND"][time.localtime().tm_wday])')"`

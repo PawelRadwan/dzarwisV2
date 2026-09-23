@@ -254,13 +254,13 @@ def parse_actions(text):
 
 def manual_heating_program(ctrl_date, ctrl_time, minutes):
     # program S z jednorazową akcją grzania (data!) na najbliższą minutę zegara sterownika.
-    # Rok dwucyfrowo: sterownik trzyma rok na 6 bitach od 2000, a kotek wpisuje go bez odjęcia 2000
-    # ("2026" zapisało się jako 2026 % 64 = 42, czyli 2042 - akcja nigdy się nie wykonała)
+    # UWAGA: kotek zapisuje lata 2016-2031 o 16 za dużo (2026 -> 2042), a rok dwucyfrowy odrzuca
+    # zostawiając akcję "codziennie 00:00" - dlatego po wgraniu check_manual_program
     now = datetime.datetime.strptime('%s %s' % (ctrl_date, ctrl_time), '%Y/%m/%d %H:%M:%S')
     start = now.replace(second=0) + datetime.timedelta(minutes=2 if now.second >= 45 else 1)
     xml = ('<pompa CfgVer="1.0"><program numer="S" opis="reczne grzanie">'
            '<akcja data="%s" czas="%s"><grzanie czas="%d"/></akcja></program></pompa>\n'
-           % (start.strftime('%y/%m/%d'), start.strftime('%H:%M'), minutes))
+           % (start.strftime('%Y/%m/%d'), start.strftime('%H:%M'), minutes))
     return xml, start.strftime('%Y/%m/%d %H:%M')
 
 
@@ -272,6 +272,9 @@ def check_manual_program(text, start):
     saved = '%s %s' % (m.group(1), m.group(2).rjust(5, '0'))
     if saved != start:
         raise KotekError('sterownik zapisał ręczne grzanie na %s zamiast %s - pompa nie ruszy' % (saved, start))
+
+
+EMPTY_PROGRAM_S = '<pompa CfgVer="1.0"><program numer="S" opis="brak"></program></pompa>\n'
 
 
 def _is_int(v):
@@ -442,14 +445,27 @@ class HeatPump:
         os.makedirs(self.data_dir, exist_ok=True)
         with open(path, 'w') as f:
             f.write(xml)
-        self._kotek(['program', path])
-        check_manual_program(self._kotek(['czytajprogram', 'S']), start)
+        try:
+            self._kotek(['program', path])
+            check_manual_program(self._kotek(['czytajprogram', 'S']), start)
+        except KotekError:
+            self._clear_program_s()       # nie zostawiać w S akcji z błędną datą albo "codziennie"
+            raise
         start_ts = int(self.clock() + (datetime.datetime.strptime(start, '%Y/%m/%d %H:%M') - ctrl).total_seconds())
         self.manual.update(heating_start=start[-5:], heating_start_ts=start_ts,
                            heating_until=start_ts + minutes * 60)
         self._save_manual()
         log.info('ręczne grzanie %d min, start %s (czas sterownika)', minutes, start)
         self.poll(full=True)
+
+    def _clear_program_s(self):
+        path = os.path.join(self.data_dir, 'pompa-S-pusty.xml')
+        with open(path, 'w') as f:
+            f.write(EMPTY_PROGRAM_S)
+        try:
+            self._kotek(['program', path])
+        except KotekError as e:
+            log.error('czyszczenie programu S: %s', e)
 
     def run(self):
         while True:

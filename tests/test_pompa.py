@@ -55,6 +55,7 @@ class FakeKotek:
         self.active = 3
         self.program_files = []
         self.program_s = 'Program nr ........... 17\nOpis ................. brak\n'
+        self.year_shift = lambda y: y          # prawdziwy kotek: lata 2016-2031 +16
 
     def __call__(self, args):
         self.calls.append(list(args))
@@ -83,12 +84,13 @@ class FakeKotek:
         if cmd == 'program':
             with open(args[-1]) as f:
                 self.program_files.append(f.read())
-            # sterownik: rok na 6 bitach od 2000, kotek wypisuje go + 2000
             m = re.search(r'data="(\d+)/(\d\d)/(\d\d)" czas="(\d\d:\d\d)"><grzanie czas="(\d+)"', self.program_files[-1])
             if m:
                 self.program_s = ('Program nr ........... 17\nOpis ................. reczne grzanie\n'
                                   'AK. 1: Grzanie %d/%s/%s %s pco= zew= czas= %smin\n'
-                                  % (2000 + int(m.group(1)) % 64, m.group(2), m.group(3), m.group(4), m.group(5)))
+                                  % (self.year_shift(int(m.group(1))), m.group(2), m.group(3), m.group(4), m.group(5)))
+            elif 'numer="S" opis="brak"' in self.program_files[-1]:
+                self.program_s = 'Program nr ........... 17\nOpis ................. brak\n'
             return ''
         raise AssertionError('niedozwolone polecenie: %r' % (args,))
 
@@ -239,7 +241,7 @@ class ManualProgramTest(unittest.TestCase):
         xml, start = pompa.manual_heating_program('2026/09/18', '13:03:57', 60)
         self.assertEqual(start, '2026/09/18 13:05')      # sekundy >= 45 -> +2 min
         self.assertIn('<program numer="S"', xml)
-        self.assertIn('<akcja data="26/09/18" czas="13:05"><grzanie czas="60"/></akcja>', xml)
+        self.assertIn('<akcja data="2026/09/18" czas="13:05"><grzanie czas="60"/></akcja>', xml)
 
     def test_program_s_early_seconds(self):
         self.assertEqual(pompa.manual_heating_program('2026/09/18', '13:03:10', 30)[1], '2026/09/18 13:04')
@@ -247,7 +249,7 @@ class ManualProgramTest(unittest.TestCase):
     def test_program_s_over_midnight(self):
         xml, start = pompa.manual_heating_program('2026/12/31', '23:59:50', 90)
         self.assertEqual(start, '2027/01/01 00:01')
-        self.assertIn('data="27/01/01" czas="00:01"', xml)
+        self.assertIn('data="2027/01/01" czas="00:01"', xml)
 
     def test_check_saved_program(self):
         pompa.check_manual_program('AK. 1: Grzanie 2026/09/23 11:02 pco= zew= czas= 60min\n', '2026/09/23 11:02')
@@ -350,7 +352,7 @@ class HeatPumpTest(unittest.TestCase):
         self.hp.poll(full=True)
         self.hp.manual_heating(1)
         self.assertEqual(len(self.kotek.program_files), 1)
-        self.assertIn('<akcja data="26/09/18" czas="13:05"><grzanie czas="60"/></akcja>', self.kotek.program_files[0])
+        self.assertIn('<akcja data="2026/09/18" czas="13:05"><grzanie czas="60"/></akcja>', self.kotek.program_files[0])
         m = self.hp.snapshot()['manual']
         self.assertEqual(m['heating_start'], '13:05')
         # start za ~63 s wg zegara sterownika (13:03:57 -> 13:05:00), koniec godzinę później
@@ -358,13 +360,13 @@ class HeatPumpTest(unittest.TestCase):
         self.assertEqual(m['heating_until'], int(self.now + 63 + 3600))
 
     def test_manual_heating_not_saved(self):
-        # sterownik zapisał inną datę (np. stary kotek z pełnym rokiem) - błąd, bez udawania grzania
+        # kotek zapisał złą datę (2026 -> 2042) - błąd, program S wyczyszczony, bez udawania grzania
+        self.kotek.year_shift = lambda y: y + 16 if 2016 <= y <= 2031 else y
         self.hp.poll(full=True)
-        orig = self.kotek.__call__
-        self.hp.runner = lambda args: ('AK. 1: Grzanie 2042/09/18 13:05 pco= zew= czas= 60min\n'
-                                       if args[-1] == 'S' and 'czytajprogram' in args else orig(args))
-        with self.assertRaisesRegex(pompa.KotekError, '2042'):
+        with self.assertRaisesRegex(pompa.KotekError, '2042/09/18 13:05 zamiast 2026/09/18 13:05'):
             self.hp.manual_heating(1)
+        self.assertIn('numer="S" opis="brak"', self.kotek.program_files[-1])
+        self.assertNotIn('AK.', self.kotek.program_s)
         self.assertIsNone(self.hp.snapshot()['manual']['heating_until'])
 
     def test_manual_heating_validation(self):

@@ -19,6 +19,7 @@ KOTEK_TIMEOUT = 20      # s
 POLL_INTERVAL = 5       # s, status i temperatury
 SLOW_INTERVAL = 60      # s, harmonogram, lista programów, ostatnie akcje
 PROGRAM_CONFIRM = 20    # s, wlaczprogram działa z opóźnieniem
+CLEAR_S_MARGIN = 30 * 60   # s po planowanym końcu ręcznego grzania: rozruch pomp 10 min przesuwa grzanie + wybieg 10 min
 
 # kolejność i nazwy czujników na stronie (funkcje z konfiguracji sterownika)
 SENSORS = [('zco', 'Zasilanie CO'), ('pco', 'Powrót CO'), ('zko', 'Zasilanie kolektora'),
@@ -313,7 +314,7 @@ class HeatPump:
 
     def _load_manual(self):
         empty = {'pumps_co_until': None, 'pumps_kol_until': None,
-                 'heating_start': None, 'heating_start_ts': None, 'heating_until': None}
+                 'heating_start': None, 'heating_start_ts': None, 'heating_until': None, 'clear_s_at': None}
         try:
             with open(self.state_path) as f:
                 empty.update({k: v for k, v in json.load(f).items() if k in empty})
@@ -336,9 +337,12 @@ class HeatPump:
             if self.manual[key] and self.manual[key] <= now:
                 self.manual[key] = None
                 changed = True
-        # akcja z dniem tygodnia - bez wyczyszczenia S grzałaby znów za tydzień; przy błędzie ponowi przy odczycie
-        if self.manual['heating_until'] and self.manual['heating_until'] <= now and self._clear_program_s():
+        if self.manual['heating_until'] and self.manual['heating_until'] <= now:
             self.manual.update(heating_start=None, heating_start_ts=None, heating_until=None)
+            changed = True
+        # akcja z dniem tygodnia - bez wyczyszczenia S grzałaby znów za tydzień; przy błędzie ponowi przy odczycie
+        if self.manual['clear_s_at'] and self.manual['clear_s_at'] <= now and self._clear_program_s():
+            self.manual['clear_s_at'] = None
             changed = True
         if changed:
             self._save_manual()
@@ -463,7 +467,8 @@ class HeatPump:
             raise
         start_ts = int(self.clock() + (datetime.datetime.strptime(start, '%Y/%m/%d %H:%M') - ctrl).total_seconds())
         self.manual.update(heating_start=start[-5:], heating_start_ts=start_ts,
-                           heating_until=start_ts + minutes * 60)
+                           heating_until=start_ts + minutes * 60,
+                           clear_s_at=start_ts + minutes * 60 + CLEAR_S_MARGIN)
         self._save_manual()
         log.info('ręczne grzanie %d min, start %s (czas sterownika)', minutes, start)
         self.poll(full=True)

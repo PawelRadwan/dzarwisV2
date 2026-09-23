@@ -292,7 +292,8 @@ class HeatPumpTest(unittest.TestCase):
         self.assertEqual(len(s['temps']), 5)
         self.assertEqual(s['clock_diff_min'], -61)          # 13:03:57 wobec 14:05:00
         self.assertEqual(s['manual'], {'pumps_co_until': None, 'pumps_kol_until': None,
-                                       'heating_start': None, 'heating_start_ts': None, 'heating_until': None})
+                                       'heating_start': None, 'heating_start_ts': None, 'heating_until': None,
+                                       'clear_s_at': None})
 
     def test_connection_lost(self):
         self.hp.poll(full=True)
@@ -375,10 +376,14 @@ class HeatPumpTest(unittest.TestCase):
         self.now += 30 * 60
         self.hp.poll()
         self.assertIn('AK.', self.kotek.program_s)          # w trakcie grzania S zostaje
-        self.now += 40 * 60
+        self.now += 40 * 60                                   # po planowanym końcu, grzanie mogło ruszyć później
+        self.hp.poll()
+        self.assertIsNone(self.hp.snapshot()['manual']['heating_until'])
+        self.assertIn('AK.', self.kotek.program_s)
+        self.now += 30 * 60
         self.hp.poll()
         self.assertNotIn('AK.', self.kotek.program_s)
-        self.assertIsNone(self.hp.snapshot()['manual']['heating_until'])
+        self.assertIsNone(self.hp.snapshot()['manual']['clear_s_at'])
 
     def test_manual_heating_clear_retried(self):
         # brak łączności przy końcu grzania - stan zostaje, czyszczenie przy kolejnym odczycie
@@ -387,11 +392,11 @@ class HeatPumpTest(unittest.TestCase):
         self.now += 2 * 3600
         self.kotek.fail = True
         self.hp.poll()
-        self.assertIsNotNone(self.hp.manual['heating_until'])
+        self.assertIsNotNone(self.hp.manual['clear_s_at'])
         self.kotek.fail = False
         self.hp.poll()
         self.assertNotIn('AK.', self.kotek.program_s)
-        self.assertIsNone(self.hp.manual['heating_until'])
+        self.assertIsNone(self.hp.manual['clear_s_at'])
 
     def test_manual_heating_not_saved(self):
         # kotek zapisał akcję inaczej (np. "codziennie") - błąd, program S wyczyszczony, bez udawania grzania

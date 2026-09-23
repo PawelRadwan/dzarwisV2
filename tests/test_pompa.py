@@ -344,13 +344,35 @@ class HeatPumpTest(unittest.TestCase):
         self.assertNotIn('samepompy', [c[0] for c in self.cmds()])
 
     def test_stop_pumps(self):
+        # samepompy 0 0 nie wyłącza pracujących pomp - stop to 1 min
         self.hp.pumps(co_min=15, kol_min=15)
         self.hp.stop_pumps()
-        self.assertEqual([c for c in self.cmds() if c[0] == 'samepompy'][-1], ['samepompy', '0', '0'])
-        self.hp.poll(full=True)
+        self.assertEqual([c for c in self.cmds() if c[0] == 'samepompy'][-1], ['samepompy', '1', '1'])
         m = self.hp.snapshot()['manual']
-        self.assertIsNone(m['pumps_co_until'])
-        self.assertIsNone(m['pumps_kol_until'])
+        self.assertEqual(m['pumps_co_until'], int(self.now + 60))
+        self.assertEqual(m['pumps_kol_until'], int(self.now + 60))
+
+    def test_post_run_after_compressor_stop(self):
+        # sterownik nie kończy wybiegu pomp - panel po stopie sprężarki wysyła samepompy 10 10
+        working = STATUS.replace('nazwa="AWARIA"', 'nazwa="PRACA"')
+        self.kotek.status = working
+        self.hp.poll(full=True)
+        self.hp.poll()
+        self.assertNotIn('samepompy', [c[0] for c in self.cmds()])
+        self.kotek.status = STATUS.replace('nazwa="AWARIA"', 'nazwa="ODPOCZYNEK"')
+        self.hp.poll()
+        self.assertEqual([c for c in self.cmds() if c[0] == 'samepompy'], [['samepompy', '10', '10']])
+        m = self.hp.snapshot()['manual']
+        self.assertEqual(m['pumps_co_until'], int(self.now + 600))
+        self.hp.poll()                                        # tylko raz, przy przejściu
+        self.assertEqual(len([c for c in self.cmds() if c[0] == 'samepompy']), 1)
+
+    def test_no_post_run_without_work(self):
+        self.kotek.status = STATUS.replace('nazwa="AWARIA"', 'nazwa="ROZRUCH"')
+        self.hp.poll(full=True)
+        self.kotek.status = STATUS.replace('nazwa="AWARIA"', 'nazwa="GOTOWA"')
+        self.hp.poll()
+        self.assertNotIn('samepompy', [c[0] for c in self.cmds()])
 
     def test_expired_pumps_cleared(self):
         self.hp.pumps(co_min=1, kol_min=0)

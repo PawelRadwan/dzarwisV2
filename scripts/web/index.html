@@ -932,7 +932,9 @@
     });
     $('h-pumps-cd').innerHTML = parts.join('<br>');
     $('h-pumps-cd').classList.toggle('on', parts.length > 0);
-    $('h-pumps-stop').hidden = parts.length === 0;
+    // pompy pracujące bez licznika w spoczynku - sterownik nie kończy wybiegu po grzaniu
+    var stray = heat.state === 'GOTOWA' && (heat.pumps.co || heat.pumps.kol);
+    $('h-pumps-stop').hidden = parts.length === 0 && !stray;
   }
 
   function refreshHeat() {

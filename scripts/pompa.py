@@ -19,6 +19,7 @@ KOTEK_TIMEOUT = 20      # s
 POLL_INTERVAL = 5       # s, status i temperatury
 SLOW_INTERVAL = 60      # s, harmonogram, lista programów, ostatnie akcje
 PROGRAM_CONFIRM = 20    # s, wlaczprogram działa z opóźnieniem
+POST_RUN_MIN = 10       # min, wybieg pomp po wyłączeniu sprężarki (pco_stop/pko_stop w konfiguracji sterownika)
 CLEAR_S_MARGIN = 30 * 60   # s po planowanym końcu ręcznego grzania: rozruch pomp 10 min przesuwa grzanie + wybieg 10 min
 
 # kolejność i nazwy czujników na stronie (funkcje z konfiguracji sterownika)
@@ -360,8 +361,11 @@ class HeatPump:
                     'defs': {n: parse_program(self._kotek(['czytajprogram', n])) for n in ('1', '2', '3', '4', 'S')},
                     'at': self.clock(),
                 }
+            was_working = self.status is not None and self.status['state'] == 'PRACA'
             self.status, self.temps, self.error = status, temps, None
             self.status_at = self.clock()
+            if was_working and status['state'] != 'PRACA':
+                self._post_run()
         except (KotekError, ET.ParseError, AttributeError, ValueError, TypeError) as e:
             self.error = 'Brak połączenia ze sterownikiem pompy: %s' % e
             log.error('%s', self.error)
@@ -438,11 +442,22 @@ class HeatPump:
         log.info('same pompy: CO %d min, kolektor %d min', co_min, kol_min)
         self.poll()
 
-    def stop_pumps(self):
-        self._kotek(['samepompy', '0', '0'])
-        self.manual['pumps_co_until'] = self.manual['pumps_kol_until'] = None
+    def _post_run(self):
+        # sterownik po wyłączeniu sprężarki nie kończy wybiegu pomp (pco_stop/pko_stop) - pracują bez końca;
+        # licznik samepompy kończy się poprawnie, więc panel sam ustawia wybieg
+        self._kotek(['samepompy', str(POST_RUN_MIN), str(POST_RUN_MIN)])
+        until = int(self.clock() + POST_RUN_MIN * 60)
+        self.manual['pumps_co_until'] = self.manual['pumps_kol_until'] = until
         self._save_manual()
-        log.info('same pompy: stop')
+        log.info('sprężarka stop - wybieg pomp %d min (samepompy)', POST_RUN_MIN)
+
+    def stop_pumps(self):
+        # samepompy 0 0 nie wyłącza pracujących pomp (0 = nie uruchamiaj); 1 min - staną po minucie
+        self._kotek(['samepompy', '1', '1'])
+        until = int(self.clock() + 60)
+        self.manual['pumps_co_until'] = self.manual['pumps_kol_until'] = until
+        self._save_manual()
+        log.info('same pompy: stop (1 min)')
         self.poll()
 
     def manual_heating(self, hours):

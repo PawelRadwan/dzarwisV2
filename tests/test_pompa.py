@@ -361,6 +361,15 @@ class HeatPumpTest(unittest.TestCase):
     def samepompy(self):
         return [c for c in self.cmds() if c[0] == 'samepompy']
 
+    def test_stop_pumps_refused_in_pompy_mode(self):
+        # w trybie "Same Pompy" sterownik pomija samepompy - panel nie udaje zatrzymania
+        self.kotek.status = STATUS.replace('nazwa="AWARIA"', 'nazwa="POMPY"').replace(
+            'opis="Awaria           "', 'opis="Same Pompy KOL:447"')
+        self.hp.poll(full=True)
+        with self.assertRaisesRegex(pompa.KotekError, 'staną same za 8 min'):
+            self.hp.stop_pumps()
+        self.assertEqual(self.samepompy(), [])
+
     def test_post_run_after_compressor_stop(self):
         # sterownik nie kończy wybiegu pomp; samepompy w ODPOCZYNKU ignoruje - panel wysyła je w stanie GOTOWA
         self.set_state('PRACA')

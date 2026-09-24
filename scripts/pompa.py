@@ -474,6 +474,12 @@ class HeatPump:
                          self.post_run['tries'])
 
     def stop_pumps(self):
+        # w trybie "Same Pompy" (stan POMPY) sterownik potwierdza, ale pomija każde samepompy (też 0 0 i 1 1)
+        # i zmianę programu - odlicza dalej (2026-09-24); stop działa tylko na pompy zawieszone po grzaniu
+        if self.status and self.status.get('state') == 'POMPY':
+            m = re.search(r':\s*(\d+)', self.status.get('state_text') or '')
+            left = ' — staną same za %d min' % -(-int(m.group(1)) // 60) if m else ''
+            raise KotekError('sterownik nie pozwala przerwać trybu „Same Pompy”%s' % left)
         # samepompy 0 0 nie wyłącza pracujących pomp (0 = nie uruchamiaj); 1 min - staną po minucie
         self._kotek(['samepompy', '1', '1'])
         until = int(self.clock() + 60)

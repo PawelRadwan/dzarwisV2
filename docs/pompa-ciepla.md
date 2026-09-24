@@ -57,7 +57,7 @@ Legenda ryzyka: **R** — tylko odczyt; **S** — zmienia pracę pompy (odwracal
 |---|---|
 | `wlaczprogram <n>` | ustawia aktywny program. Pomoc: 1–4, sterownik przyjął też 5. **Działa z opóźnieniem kilku sekund**; wypisuje numer liczony od zera (`programNr=2` = program 3) |
 | `grzaniewlwyl co\|cwu 0\|1` | ręcznie włącza/wyłącza funkcję grzania CO lub CWU; normalnie ustawia to program |
-| `samepompy <min kolektora> <min CO>` | uruchamia same pompy obiegowe (bez sprężarki) na podany czas; po zakończeniu aktualizuje temperatury w statusie. **`0` = nie uruchamiaj, nie „wyłącz”** — `samepompy 0 0` nie zatrzymuje pracujących pomp; zatrzymanie: `samepompy 1 1` (staną po ~1 min) |
+| `samepompy <min kolektora> <min CO>` | uruchamia same pompy obiegowe (bez sprężarki) na podany czas; po zakończeniu aktualizuje temperatury w statusie. **`0` = nie uruchamiaj, nie „wyłącz”** — `samepompy 0 0` nie zatrzymuje pracujących pomp; zatrzymanie pomp zawieszonych po grzaniu (stan GOTOWA): `samepompy 1 1` (staną po ~1 min). **W trybie „Same Pompy” (stan POMPY, `Same Pompy KOL:<s>`) każde kolejne `samepompy` (też `0 0`, `1 1`) i `wlaczprogram` jest potwierdzane, ale pomijane** — pomp odliczających czas nie da się przerwać (2026-09-24) |
 | `termostat <1..2> 0\|1` | włącza/wyłącza termostat (skonfigurowany: #1 „bojler” 55 °C, histereza 0,5) |
 | `flagiustaw <lista>` | ustawia do 4 flag użytkownika (`USR1,-USR2`, `~` negacja) — do warunków w programach |
 | `regulacja czas <%>` | korekta czasu grzania ±50% |

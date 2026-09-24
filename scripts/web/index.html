@@ -930,11 +930,14 @@
     [['pumps_co_until', 'Pompa CO'], ['pumps_kol_until', 'Pompa kolektora']].forEach(function (p) {
       if (m[p[0]] && now < m[p[0]]) parts.push(p[1] + ' — zostało <b>' + clockFmt(m[p[0]] - now) + '</b>');
     });
+    // tryb "Same Pompy" - sterownik odlicza sam i nie da się go przerwać
+    var own = heat.state === 'POMPY' && /:\s*(\d+)/.exec(heat.state_text || '');
+    if (own) parts = ['Same pompy — sterownik wyłączy je za <b>' + clockFmt(+own[1]) + '</b> (nie da się przerwać)'];
     $('h-pumps-cd').innerHTML = parts.join('<br>');
     $('h-pumps-cd').classList.toggle('on', parts.length > 0);
-    // pompy pracujące bez licznika w spoczynku - sterownik nie kończy wybiegu po grzaniu
+    // stop działa tylko na pompy zawieszone po grzaniu (stan Gotowa bez licznika)
     var stray = heat.state === 'GOTOWA' && (heat.pumps.co || heat.pumps.kol);
-    $('h-pumps-stop').hidden = parts.length === 0 && !stray;
+    $('h-pumps-stop').hidden = !stray;
   }
 
   function refreshHeat() {

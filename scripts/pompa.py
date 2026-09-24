@@ -20,6 +20,8 @@ POLL_INTERVAL = 5       # s, status i temperatury
 SLOW_INTERVAL = 60      # s, harmonogram, lista programów, ostatnie akcje
 PROGRAM_CONFIRM = 20    # s, wlaczprogram działa z opóźnieniem
 POST_RUN_MIN = 10       # min, wybieg pomp po wyłączeniu sprężarki (pco_stop/pko_stop w konfiguracji sterownika)
+POST_RUN_RETRY = 60     # s między próbami, gdy sterownik nie przejdzie w stan POMPY
+POST_RUN_TRIES = 3
 CLEAR_S_MARGIN = 30 * 60   # s po planowanym końcu ręcznego grzania: rozruch pomp 10 min przesuwa grzanie + wybieg 10 min
 
 # kolejność i nazwy czujników na stronie (funkcje z konfiguracji sterownika)
@@ -308,6 +310,7 @@ class HeatPump:
         self.status_at = None           # czas Pi, w którym odczytano status (do przeliczenia zegara sterownika)
         self.state_path = os.path.join(data_dir, 'pompa-stan.json')
         self.manual = self._load_manual()
+        self.post_run = None            # wybieg pomp po grzaniu do ustawienia: {'tries', 'sent_at'}
 
     def _kotek(self, args):
         with self.lock:
@@ -365,7 +368,9 @@ class HeatPump:
             self.status, self.temps, self.error = status, temps, None
             self.status_at = self.clock()
             if was_working and status['state'] != 'PRACA':
-                self._post_run()
+                self.post_run = {'tries': 0, 'sent_at': None}
+            if self.post_run:
+                self._post_run(status)
         except (KotekError, ET.ParseError, AttributeError, ValueError, TypeError) as e:
             self.error = 'Brak połączenia ze sterownikiem pompy: %s' % e
             log.error('%s', self.error)
@@ -442,14 +447,31 @@ class HeatPump:
         log.info('same pompy: CO %d min, kolektor %d min', co_min, kol_min)
         self.poll()
 
-    def _post_run(self):
+    def _post_run(self, status):
         # sterownik po wyłączeniu sprężarki nie kończy wybiegu pomp (pco_stop/pko_stop) - pracują bez końca;
-        # licznik samepompy kończy się poprawnie, więc panel sam ustawia wybieg
-        self._kotek(['samepompy', str(POST_RUN_MIN), str(POST_RUN_MIN)])
-        until = int(self.clock() + POST_RUN_MIN * 60)
-        self.manual['pumps_co_until'] = self.manual['pumps_kol_until'] = until
-        self._save_manual()
-        log.info('sprężarka stop - wybieg pomp %d min (samepompy)', POST_RUN_MIN)
+        # licznik samepompy kończy się poprawnie, ale w stanie ODPOCZYNEK jest ignorowany (2026-09-24) -
+        # wysyłany dopiero w stanie GOTOWA i potwierdzany przejściem w stan POMPY
+        state, now = status['state'], self.clock()
+        if state in ('ROZRUCH', 'PRACA') or (state == 'POMPY' and self.post_run['sent_at']):
+            if state == 'POMPY':
+                log.info('wybieg pomp potwierdzony (stan POMPY)')
+            self.post_run = None
+        elif state == 'GOTOWA':
+            if not any(status['pumps'].values()):
+                self.post_run = None                  # pompy stanęły same
+            elif self.post_run['sent_at'] is None or now - self.post_run['sent_at'] >= POST_RUN_RETRY:
+                if self.post_run['tries'] >= POST_RUN_TRIES:
+                    log.error('wybieg pomp: sterownik nie przyjął samepompy po %d próbach', POST_RUN_TRIES)
+                    self.post_run = None
+                    return
+                self.post_run['tries'] += 1
+                self.post_run['sent_at'] = now
+                self._kotek(['samepompy', str(POST_RUN_MIN), str(POST_RUN_MIN)])
+                until = int(now + POST_RUN_MIN * 60)
+                self.manual['pumps_co_until'] = self.manual['pumps_kol_until'] = until
+                self._save_manual()
+                log.info('sprężarka stop - wybieg pomp %d min (samepompy, próba %d)', POST_RUN_MIN,
+                         self.post_run['tries'])
 
     def stop_pumps(self):
         # samepompy 0 0 nie wyłącza pracujących pomp (0 = nie uruchamiaj); 1 min - staną po minucie

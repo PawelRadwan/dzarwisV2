@@ -352,27 +352,58 @@ class HeatPumpTest(unittest.TestCase):
         self.assertEqual(m['pumps_co_until'], int(self.now + 60))
         self.assertEqual(m['pumps_kol_until'], int(self.now + 60))
 
+    def set_state(self, state, pumps=True):
+        st = STATUS.replace('nazwa="AWARIA"', 'nazwa="%s"' % state)
+        if pumps:
+            st = st.replace('<pompa id="co"  stan="0"/>', '<pompa id="co"  stan="1"/>')
+        self.kotek.status = st
+
+    def samepompy(self):
+        return [c for c in self.cmds() if c[0] == 'samepompy']
+
     def test_post_run_after_compressor_stop(self):
-        # sterownik nie kończy wybiegu pomp - panel po stopie sprężarki wysyła samepompy 10 10
-        working = STATUS.replace('nazwa="AWARIA"', 'nazwa="PRACA"')
-        self.kotek.status = working
+        # sterownik nie kończy wybiegu pomp; samepompy w ODPOCZYNKU ignoruje - panel wysyła je w stanie GOTOWA
+        self.set_state('PRACA')
         self.hp.poll(full=True)
+        self.set_state('ODPOCZYNEK')
         self.hp.poll()
-        self.assertNotIn('samepompy', [c[0] for c in self.cmds()])
-        self.kotek.status = STATUS.replace('nazwa="AWARIA"', 'nazwa="ODPOCZYNEK"')
+        self.assertEqual(self.samepompy(), [])
+        self.set_state('GOTOWA')
         self.hp.poll()
-        self.assertEqual([c for c in self.cmds() if c[0] == 'samepompy'], [['samepompy', '10', '10']])
-        m = self.hp.snapshot()['manual']
-        self.assertEqual(m['pumps_co_until'], int(self.now + 600))
-        self.hp.poll()                                        # tylko raz, przy przejściu
-        self.assertEqual(len([c for c in self.cmds() if c[0] == 'samepompy']), 1)
+        self.assertEqual(self.samepompy(), [['samepompy', '10', '10']])
+        self.assertEqual(self.hp.snapshot()['manual']['pumps_co_until'], int(self.now + 600))
+        self.set_state('POMPY')
+        self.hp.poll()
+        self.assertIsNone(self.hp.post_run)
+        self.now += 120
+        self.hp.poll()
+        self.assertEqual(len(self.samepompy()), 1)
+
+    def test_post_run_retried(self):
+        # sterownik nie przeszedł w POMPY - ponowienie co minutę, najwyżej 3 razy
+        self.set_state('PRACA')
+        self.hp.poll(full=True)
+        self.set_state('GOTOWA')
+        for _ in range(10):
+            self.hp.poll()
+            self.now += 30
+        self.assertEqual(len(self.samepompy()), 3)
+        self.assertIsNone(self.hp.post_run)
+
+    def test_post_run_pumps_stopped_themselves(self):
+        self.set_state('PRACA')
+        self.hp.poll(full=True)
+        self.set_state('GOTOWA', pumps=False)
+        self.hp.poll()
+        self.assertEqual(self.samepompy(), [])
+        self.assertIsNone(self.hp.post_run)
 
     def test_no_post_run_without_work(self):
-        self.kotek.status = STATUS.replace('nazwa="AWARIA"', 'nazwa="ROZRUCH"')
+        self.set_state('ROZRUCH')
         self.hp.poll(full=True)
-        self.kotek.status = STATUS.replace('nazwa="AWARIA"', 'nazwa="GOTOWA"')
+        self.set_state('GOTOWA')
         self.hp.poll()
-        self.assertNotIn('samepompy', [c[0] for c in self.cmds()])
+        self.assertEqual(self.samepompy(), [])
 
     def test_expired_pumps_cleared(self):
         self.hp.pumps(co_min=1, kol_min=0)

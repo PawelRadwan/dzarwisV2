@@ -151,6 +151,20 @@ class HistoryTest(unittest.TestCase):
         self.assertEqual((h['points'], h['min'], h['max'], h['first_date']), ([], None, None, None))
         self.assertEqual(termometry.Thermometers(source=lambda: [], clock=lambda: self.now).history('kuchnia')['points'], [])
 
+    def test_date_out_of_range(self):
+        # na 32-bitowym Pi mktime rzuca OverflowError poza latami 1901-2038
+        real = termometry.time.mktime
+
+        def overflow(_):
+            raise OverflowError('mktime argument out of range')
+
+        termometry.time.mktime = overflow
+        try:
+            self.assertRaises(ValueError, self.t.history, 'kuchnia', '1800-01-01')
+            self.assertIsNone(self.t.history('kuchnia', '9999-12-31')['date'])
+        finally:
+            termometry.time.mktime = real
+
     def test_bad_date(self):
         for date in ('wczoraj', '2026-13-01', ''):
             self.assertRaises(ValueError, self.t.history, 'kuchnia', date)

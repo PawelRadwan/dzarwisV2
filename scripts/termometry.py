@@ -38,8 +38,12 @@ def day_bounds(date):
         lt = time.strptime(date, '%Y-%m-%d')
     except (TypeError, ValueError):
         raise ValueError('data w formacie RRRR-MM-DD')
-    start = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
-    end = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday + 1, 0, 0, 0, 0, 0, -1))
+    try:
+        start = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
+        end = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday + 1, 0, 0, 0, 0, 0, -1))
+    except OverflowError:
+        # 32-bitowe Pi: daty poza zakresem time_t
+        raise ValueError('data poza zakresem')
     return int(start), int(end)
 
 
@@ -139,11 +143,13 @@ class Thermometers:
         now = int(self.clock())
         today = date_of(now)
         if date is not None:
-            start, end = day_bounds(date)
+            try:
+                time.strptime(date, '%Y-%m-%d')
+            except (TypeError, ValueError):
+                raise ValueError('data w formacie RRRR-MM-DD')
             if date >= today:
                 date = None
-        if date is None:
-            start, end = now - 86400, now + 1
+        start, end = day_bounds(date) if date else (now - 86400, now + 1)
         points = self.store.points(name, start, end) if self.store else []
         first = self.store.first_ts(name) if self.store else None
         temps = [p[1] for p in points]

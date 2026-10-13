@@ -1,0 +1,25 @@
+# /opt/zigbee2mqtt/data/configuration.yaml - stan początkowy (bez kluczy sieci i listy urządzeń,
+# Zigbee2MQTT dopisuje je sam przy pierwszym starcie)
+version: 5
+homeassistant:
+    enabled: false
+frontend:
+    enabled: true
+    port: 8080
+mqtt:
+    base_topic: zigbee2mqtt
+    server: "mqtt://localhost"
+serial:
+    port: /dev/serial/by-id/usb-Itead_Sonoff_Zigbee_3.0_USB_Dongle_Plus_V2_96ae84f681c2ef118cfbbe138148b910-if00-port0
+    adapter: ember
+advanced:
+    channel: 20
+    network_key: GENERATE
+    pan_id: GENERATE
+    ext_pan_id: GENERATE
+    log_level: info
+    # czas ostatniego kontaktu w treści - panel pokazuje wiek odczytu
+    last_seen: epoch
+device_options:
+    # broker pamięta ostatni odczyt - panel ma go od razu po restarcie
+    retain: true

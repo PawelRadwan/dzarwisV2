@@ -12,6 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import dzarwis_global_vars as dgv
 import energia
 import pompa
+import termometry
 from lights_v2_ import ModbusError, MODBUS_TIMEOUT, read_registers
 from pyModbusTCP.client import ModbusClient
 
@@ -123,8 +124,8 @@ class Panel:
         self._modbus(self._all_off)
 
 
-def make_handler(panel, web_dir, energy=None, heat=None):
-    # energy: energia.Collector, heat: pompa.HeatPump; None = zakładka wyłączona
+def make_handler(panel, web_dir, energy=None, heat=None, temps=None):
+    # energy: energia.Collector, heat: pompa.HeatPump, temps: termometry.Thermometers; None = zakładka wyłączona
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status, body, ctype):
             self.send_response(status)
@@ -177,6 +178,11 @@ def make_handler(panel, web_dir, energy=None, heat=None):
                 self._pv(energy.months() if energy else None)
             elif self.path == '/api/heat':
                 self._heat(None)
+            elif self.path == '/api/temps':
+                if temps is None:
+                    self._json(503, {'error': 'Obsługa termometrów wyłączona'})
+                else:
+                    self._json(200, temps.snapshot())
             elif self.path in STATIC:
                 name, ctype = STATIC[self.path]
                 with open(os.path.join(web_dir, name), 'rb') as f:
@@ -257,7 +263,9 @@ def main():
     collector.start()
     heat = pompa.HeatPump(pompa.run_kotek, os.path.dirname(ENERGY_DB))
     heat.start()
-    server = ThreadingHTTPServer(('', PORT), make_handler(Panel(mb), WEB_DIR, collector, heat))
+    temps = termometry.Thermometers()
+    temps.start()
+    server = ThreadingHTTPServer(('', PORT), make_handler(Panel(mb), WEB_DIR, collector, heat, temps))
     log.info('panel WWW na porcie %s, WAGO %s:%s, energia %s', PORT, dgv.PLC.ip, dgv.PLC.port, energia.GATEWAY_IP)
     server.serve_forever()
 

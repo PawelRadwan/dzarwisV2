@@ -95,6 +95,7 @@ Serwer wydaje tylko pliki z listy `STATIC` w `web_panel.py` — nic innego z dys
 | `POST /api/heat/pumps` | `{"co_min": 0..120, "kol_min": 0..120}` | stan pompy |
 | `POST /api/heat/pumps/stop` | — | stan pompy |
 | `POST /api/heat/manual` | `{"hours": 0.5..8}` | stan pompy |
+| `GET /api/temps` | — | termometry Zigbee: `sensors` (lista: `id`, `label`, `temperature`, `humidity`, `battery`, `linkquality`, `ts`, `stale`) — [termometry.md](termometry.md) |
 | `GET /api/pv/months` | — | `{"since": ts, "totals": {...}, "months": [{"month": "2026-09", "from_day": 18, "import_kwh", "export_kwh", "pv_kwh", "home_kwh", "self_use_pct"}, …]}` |
 | `GET /api/pv/day?date=RRRR-MM-DD` | — | `{"date": "2026-09-18", "points": [[ts, pv_w, home_w], …]}` — dzisiejsze minuty |
 

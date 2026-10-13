@@ -1,0 +1,18 @@
+[Unit]
+Description=Zigbee2MQTT (odbiornik Sonoff Zigbee, czujniki)
+After=network.target mosquitto.service
+Wants=mosquitto.service
+StartLimitIntervalSec=0
+
+[Service]
+User=pi
+WorkingDirectory=/opt/zigbee2mqtt
+Environment=PATH=/opt/node/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/node/bin/node index.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

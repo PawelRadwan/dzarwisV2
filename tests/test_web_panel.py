@@ -347,5 +347,35 @@ class HeatHttpTest(unittest.TestCase):
         self.assertEqual(cm.exception.code, 400)
 
 
+
+class FakeThermometers:
+    def snapshot(self):
+        return {'sensors': [{'id': 'kuchnia', 'label': 'Kuchnia', 'temperature': 21.4, 'humidity': 55.4,
+                             'battery': 100, 'linkquality': 92, 'ts': 1000000, 'stale': False}]}
+
+
+class TempsHttpTest(unittest.TestCase):
+    def serve(self, temps):
+        handler = web_panel.make_handler(web_panel.Panel(FakeModbusClient()), web_panel.WEB_DIR, None, None, temps)
+        server = web_panel.ThreadingHTTPServer(('127.0.0.1', 0), handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return 'http://127.0.0.1:%d' % server.server_address[1]
+
+    def test_temps(self):
+        with urllib.request.urlopen(self.serve(FakeThermometers()) + '/api/temps', timeout=5) as resp:
+            data = json.loads(resp.read())
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(data['sensors'][0]['label'], 'Kuchnia')
+        self.assertEqual(data['sensors'][0]['temperature'], 21.4)
+
+    def test_temps_disabled(self):
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(self.serve(None) + '/api/temps', timeout=5)
+        self.assertEqual(cm.exception.code, 503)
+        self.assertIn('error', json.loads(cm.exception.read()))
+
+
 if __name__ == '__main__':
     unittest.main()

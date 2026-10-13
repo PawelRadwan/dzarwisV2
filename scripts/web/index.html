@@ -71,6 +71,7 @@
     padding: 7px 4px; min-height: 40px; border-radius: 9px; line-height: 1.15;
     color: var(--muted); text-decoration: none; font-weight: 600; font-size: 15px;
   }
+  @media (max-width: 430px) { nav a { font-size: 13px; padding: 7px 2px; } }   /* cztery zakładki na wąskim telefonie */
   nav a[aria-current="page"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
   main { padding: 14px 16px 24px; max-width: 900px; margin: 0 auto; }
   .banner {
@@ -111,6 +112,9 @@
   .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
   .stat-label { display: block; font-size: 14px; color: var(--muted); }
   .stat-value { display: block; margin-top: 6px; font-size: 26px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat-sub { display: block; margin-top: 4px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stat.stale .stat-value { color: var(--muted); }
+  .stat.stale .stat-sub:last-child { color: var(--warn); font-weight: 600; }
   .stat-value small { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 3px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-top: 10px; }
   .card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
@@ -209,6 +213,7 @@
     <a href="#oswietlenie" data-tab="oswietlenie">Oświetlenie</a>
     <a href="#pv" data-tab="pv">Energia elektryczna</a>
     <a href="#ogrzewanie" data-tab="ogrzewanie">Ogrzewanie</a>
+    <a href="#temperatury" data-tab="temperatury">Temperatury</a>
   </nav>
 </header>
 
@@ -364,6 +369,10 @@
         <dt>Zegar sterownika</dt><dd id="h-clock">–</dd>
       </dl>
     </div>
+  </section>
+  <section id="temperatury" hidden>
+    <div class="banner pv-banner" id="temps-banner" role="alert" hidden></div>
+    <div class="stats" id="temps"></div>
   </section>
 </main>
 
@@ -970,6 +979,43 @@
     delete sel.dataset.touched;
   });
 
+  // --- zakładka Temperatury ---
+  var TEMPS_POLL_MS = 10000;
+  function ago(sec) {
+    if (sec < 90) return 'przed chwilą';
+    if (sec < 5400) return Math.round(sec / 60) + ' min temu';
+    if (sec < 172800) return Math.round(sec / 3600) + ' h temu';
+    return Math.round(sec / 86400) + ' dni temu';
+  }
+  function renderTemps(d) {
+    var box = $('temps'), now = Date.now() / 1000;
+    box.textContent = '';
+    bannerSet($('temps-banner'), d.sensors.length ? '' : 'Brak odczytów z termometrów');
+    d.sensors.forEach(function (s) {
+      var tile = document.createElement('div');
+      tile.className = 'stat' + (s.stale ? ' stale' : '');
+      var add = function (cls, text) {
+        var e = document.createElement('span'); e.className = cls; e.textContent = text; tile.appendChild(e); return e;
+      };
+      add('stat-label', s.label);
+      var v = add('stat-value', num(s.temperature, 1));
+      var unit = document.createElement('small'); unit.textContent = '°C'; v.appendChild(unit);
+      var sub = [];
+      if (s.humidity != null) sub.push('Wilgotność ' + num(s.humidity, 0) + '%');
+      if (s.battery != null && s.battery <= 20) sub.push('bateria ' + num(s.battery, 0) + '%');
+      if (sub.length) add('stat-sub', sub.join(' · '));
+      add('stat-sub', (s.stale ? 'Brak odczytu – ostatni ' : '') + ago(Math.max(0, now - s.ts)));
+      box.appendChild(tile);
+    });
+  }
+  function refreshTemps() {
+    return fetch('/api/temps', { cache: 'no-store' }).then(function (r) {
+      if (r.status === 503) return r.json().then(function (d) { bannerSet($('temps-banner'), d.error); });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json().then(renderTemps);
+    }).catch(function () { bannerSet($('temps-banner'), 'Brak połączenia z panelem'); });
+  }
+
   // --- odświeżanie tylko widocznej zakładki, wstrzymane gdy karta jest w tle ---
   var timers = [];
   function every(fn, ms) { fn(); timers.push(setInterval(fn, ms)); }
@@ -981,6 +1027,7 @@
     if (tab === 'oswietlenie') every(refresh, POLL_MS);
     if (tab === 'pv') { every(refreshPv, PV_POLL_MS); every(refreshDay, DAY_POLL_MS); every(refreshMonths, DAY_POLL_MS); }
     if (tab === 'ogrzewanie') { every(refreshHeat, HEAT_POLL_MS); timers.push(setInterval(tickHeat, 1000)); }
+    if (tab === 'temperatury') every(refreshTemps, TEMPS_POLL_MS);
   }
   document.addEventListener('visibilitychange', schedule);
   schedule();

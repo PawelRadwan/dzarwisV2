@@ -35,6 +35,7 @@ flowchart LR
 | `scripts/lights_v2_.py` | Obsługa przycisków: zbocze opadające na wejściu WAGO przełącza przypisaną lampę | **produkcyjny** — usługa `lights.service` na Pi |
 | `scripts/web_panel.py` + `scripts/energia.py` + `scripts/web/` | Panel WWW na telefon: światła, PV, ogrzewanie (pompa ciepła), http://192.168.8.18/ | **produkcyjny** — usługa `web.service` na Pi |
 | `scripts/pompa.py` | Pompa ciepła przez `kotek_rpi` (zakładka Ogrzewanie) | produkcyjny — w `web.service` |
+| `scripts/termometry.py` | Termometry Zigbee przez Zigbee2MQTT/MQTT (zakładka Temperatury) | produkcyjny — w `web.service`, wymaga `zigbee2mqtt.service` i `mosquitto.service` |
 | `scripts/wago_750_comunication.py` | Sterowanie wyjściami WAGO poleceniami JSON z kolejki RabbitMQ | nieuruchomiony na Pi (wymaga Pythona ≥ 3.9) |
 | `scripts/read_power.py` | Co 10 s odczyt Growatta i licznika, zapis do InfluxDB | nieuruchomiony na Pi |
 | `scripts/bojler_ster.py` | Logika grzania bojlera (taryfa, nadwyżka PV) — **tylko wypisuje decyzje** | niedokończony |
@@ -68,5 +69,6 @@ Na produkcyjnym Raspberry Pi skrypt działa jako usługa systemd `lights.service
 - [Konfiguracja i uruchomienie](docs/uruchomienie.md)
 - [Znane problemy](docs/znane-problemy.md)
 - [Pompa ciepła — narzędzie `kotek_rpi`](docs/pompa-ciepla.md)
+- [Termometry Zigbee](docs/termometry.md)
 
 > ⚠️ To działająca instalacja domowa. Zatrzymanie `lights_v2_.py` oznacza, że przyciski ścienne przestają działać. Zmiany wdrażaj świadomie i miej plan powrotu.

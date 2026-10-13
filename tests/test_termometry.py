@@ -1,6 +1,7 @@
 # testy termometrów Zigbee bez brokera MQTT: python3 -m unittest discover -s tests
 import os
 import sys
+import time
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -105,6 +106,71 @@ class ThermometersTest(unittest.TestCase):
             self.assertRaises(StopLoop, t.run)
         self.assertEqual(sleeps, [termometry.RETRY_S] * 3)
         self.assertEqual([s['id'] for s in t.snapshot()['sensors']], ['kuchnia', 'salon'])
+
+
+
+class HistoryTest(unittest.TestCase):
+    def setUp(self):
+        # 2026-10-13 12:00 czasu lokalnego
+        self.now = time.mktime((2026, 10, 13, 12, 0, 0, 0, 0, -1))
+        self.store = termometry.TempStore(':memory:')
+        self.t = termometry.Thermometers(source=lambda: [], clock=lambda: self.now, store=self.store)
+
+    def feed(self, name, temp, ago_s, humidity=50):
+        self.t.feed('zigbee2mqtt/%s {"temperature":%s,"humidity":%s,"last_seen":%d}'
+                    % (name, temp, humidity, (self.now - ago_s) * 1000))
+
+    def test_last_24h_is_default(self):
+        self.feed('kuchnia', 19, 25 * 3600)
+        self.feed('kuchnia', 20, 23 * 3600)
+        self.feed('kuchnia', 22.5, 60, humidity=48)
+        self.feed('salon', 30, 60)
+        h = self.t.history('kuchnia')
+        self.assertEqual(h['points'], [[self.now - 23 * 3600, 20, 50], [self.now - 60, 22.5, 48]])
+        self.assertEqual((h['min'], h['max'], h['date'], h['today']), (20, 22.5, None, '2026-10-13'))
+        self.assertEqual((h['start'], h['end']), (self.now - 86400, self.now + 1))
+        self.assertEqual((h['id'], h['label'], h['first_date']), ('kuchnia', 'Kuchnia', '2026-10-12'))
+
+    def test_earlier_day_is_calendar_day(self):
+        self.feed('kuchnia', 18, 12 * 3600 + 1)        # 12.10 23:59:59
+        self.feed('kuchnia', 21, 12 * 3600)            # 13.10 00:00:00
+        self.feed('kuchnia', 17, 36 * 3600)            # 12.10 00:00:00
+        self.feed('kuchnia', 16, 36 * 3600 + 1)        # 11.10 23:59:59
+        h = self.t.history('kuchnia', '2026-10-12')
+        self.assertEqual([p[1] for p in h['points']], [17, 18])
+        self.assertEqual((h['date'], h['end'] - h['start'], h['first_date']), ('2026-10-12', 86400, '2026-10-11'))
+
+    def test_today_or_future_date_means_last_24h(self):
+        self.feed('kuchnia', 20, 13 * 3600)            # wczoraj 23:00 - w ostatnich 24 h, poza dzisiejszą dobą
+        for date in ('2026-10-13', '9999-12-31'):
+            h = self.t.history('kuchnia', date)
+            self.assertEqual((h['date'], len(h['points'])), (None, 1))
+
+    def test_no_data(self):
+        h = self.t.history('strych')
+        self.assertEqual((h['points'], h['min'], h['max'], h['first_date']), ([], None, None, None))
+        self.assertEqual(termometry.Thermometers(source=lambda: [], clock=lambda: self.now).history('kuchnia')['points'], [])
+
+    def test_bad_date(self):
+        for date in ('wczoraj', '2026-13-01', ''):
+            self.assertRaises(ValueError, self.t.history, 'kuchnia', date)
+
+    def test_repeated_message_is_stored_once(self):
+        # broker przysyła zapamiętaną wartość po każdym restarcie panelu
+        self.feed('kuchnia', 20, 600)
+        self.feed('kuchnia', 20, 600)
+        self.assertEqual(len(self.t.history('kuchnia')['points']), 1)
+
+    def test_history_survives_restart(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, 'data', 'termometry.db')
+            store = termometry.TempStore(path)
+            store.add('kuchnia', int(self.now) - 60, 21.4, 55)
+            store.db.close()
+            t = termometry.Thermometers(source=lambda: [], clock=lambda: self.now, store=termometry.TempStore(path))
+            self.assertEqual(t.history('kuchnia')['points'], [[self.now - 60, 21.4, 55]])
+            t.store.db.close()
 
 
 if __name__ == '__main__':

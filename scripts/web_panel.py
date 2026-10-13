@@ -42,6 +42,8 @@ PORT = int(os.environ.get('DZARWIS_WEB_PORT', 80))
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web')
 # minutowe pomiary energii (poza repozytorium - .gitignore)
 ENERGY_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'energia.db')
+# historia odczytów termometrów
+TEMPS_DB = os.path.join(os.path.dirname(ENERGY_DB), 'termometry.db')
 
 # jedyne pliki, które serwer wydaje: ścieżka URL -> (plik w WEB_DIR, typ)
 STATIC = {
@@ -170,6 +172,19 @@ def make_handler(panel, web_dir, energy=None, heat=None, temps=None):
                 except ValueError as e:
                     self._json(400, {'error': str(e)})
                 return
+            if path == '/api/temps/history':
+                query = urllib.parse.parse_qs(url.query)
+                name = query.get('id', [None])[0]
+                if temps is None:
+                    self._json(503, {'error': 'Obsługa termometrów wyłączona'})
+                elif not name:
+                    self._json(400, {'error': 'brak parametru id'})
+                else:
+                    try:
+                        self._json(200, temps.history(name, query.get('date', [None])[0]))
+                    except ValueError as e:
+                        self._json(400, {'error': str(e)})
+                return
             if self.path == '/api/lights':
                 self._api(lambda: None)
             elif self.path == '/api/pv':
@@ -263,7 +278,7 @@ def main():
     collector.start()
     heat = pompa.HeatPump(pompa.run_kotek, os.path.dirname(ENERGY_DB))
     heat.start()
-    temps = termometry.Thermometers()
+    temps = termometry.Thermometers(store=termometry.TempStore(TEMPS_DB))
     temps.start()
     server = ThreadingHTTPServer(('', PORT), make_handler(Panel(mb), WEB_DIR, collector, heat, temps))
     log.info('panel WWW na porcie %s, WAGO %s:%s, energia %s', PORT, dgv.PLC.ip, dgv.PLC.port, energia.GATEWAY_IP)

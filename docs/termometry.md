@@ -27,8 +27,10 @@ Usunięcie albo zmiana nazwy w panelu Zigbee2MQTT od razu usuwa stary kafelek.
 ## Zakładka Temperatury
 
 - Kafelek na czujnik: temperatura, wilgotność, wiek odczytu („12 min temu”). Odświeżanie co 10 s.
-- Czujnik wysyła odczyt po zmianie temperatury o 1 °C albo wilgotności o 1%, najrzadziej co godzinę (ustawienia raportowania nadane przez Zigbee2MQTT). Po 3 h ciszy (`STALE_S`) kafelek szarzeje i pokazuje „Brak odczytu – ostatni …” — bateria albo zasięg.
+- Czujnik wysyła odczyt po zmianie temperatury albo wilgotności (w praktyce co kilka minut, widać zmiany o 0,2 °C), najrzadziej co godzinę. Po 3 h ciszy (`STALE_S`) kafelek szarzeje i pokazuje „Brak odczytu – ostatni …” — bateria albo zasięg.
 - Poziom baterii pojawia się dopiero, gdy spadnie do 20%.
+- **Dotknięcie kafelka** otwiera pod spodem wykres temperatury z ostatnich 24 h (drugie dotknięcie go zamyka). Strzałka ‹ przechodzi do wcześniejszych dni (doba 00:00–24:00), › wraca, **Teraz** — od razu do ostatnich 24 h. Pod datą: nazwa czujnika i zakres min – max. Dotknięcie wykresu pokazuje godzinę, temperaturę i wilgotność. Przerwa w linii = ponad 2 h bez odczytu.
+- Historia jest zbierana od 2026-10-13 w `data/termometry.db` (SQLite, poza repo), bez limitu czasu. Jest przypisana do **nazwy** czujnika — po zmianie nazwy wykres zaczyna się od nowa.
 
 ## Zainstalowane urządzenia
 
@@ -87,3 +89,13 @@ curl -s http://localhost/api/temps
 ```
 
 `ts` to czas ostatniego kontaktu z czujnikiem (`last_seen` z Zigbee2MQTT), `humidity`/`battery`/`linkquality` mogą być `null`.
+
+Każdy odczyt trafia też do `data/termometry.db` (tabela `readings`: `name`, `ts`, `temperature`, `humidity`). `GET /api/temps/history?id=kuchnia` zwraca ostatnie 24 h, a z `&date=RRRR-MM-DD` (wcześniejszą niż dziś) — dobę kalendarzową:
+
+```json
+{"id": "kuchnia", "label": "Kuchnia", "date": null, "today": "2026-10-13", "first_date": "2026-10-13",
+ "start": 1791791700, "end": 1791878101, "min": 21.2, "max": 21.4,
+ "points": [[1791878116, 21.4, 54.4]]}
+```
+
+`points` to `[ts, temperatura, wilgotność]`, `first_date` — pierwszy dzień z danymi (blokuje strzałkę ‹).

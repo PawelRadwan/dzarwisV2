@@ -114,6 +114,9 @@
   .stat-value { display: block; margin-top: 6px; font-size: 26px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
   .stat-sub { display: block; margin-top: 4px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .stat.stale .stat-value { color: var(--muted); }
+  #temps .stat { cursor: pointer; touch-action: manipulation; }
+  #temps .stat.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .legend .k-temp { width: 14px; height: 2px; background: var(--pv); }
   .stat.stale .stat-sub:last-child { color: var(--warn); font-weight: 600; }
   .stat-value small { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 3px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-top: 10px; }
@@ -373,6 +376,21 @@
   <section id="temperatury" hidden>
     <div class="banner pv-banner" id="temps-banner" role="alert" hidden></div>
     <div class="stats" id="temps"></div>
+    <div class="card chart-card" id="temp-card" hidden>
+      <div class="card-head">
+        <div class="day-nav">
+          <button class="nav-btn" id="temp-prev" type="button" aria-label="Poprzedni dzień">‹</button>
+          <h2 id="temp-title">–</h2>
+          <button class="nav-btn" id="temp-next" type="button" aria-label="Następny dzień">›</button>
+          <button class="btn day-today" id="temp-now" type="button" hidden>Teraz</button>
+        </div>
+        <div class="legend"><span><i class="k-temp"></i><span id="temp-range">–</span></span></div>
+      </div>
+      <div class="chart" id="temp-chart">
+        <svg id="temp-svg" role="img" aria-label="Wykres temperatury"></svg>
+        <div class="tip" id="temp-tip" hidden></div>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -993,7 +1011,11 @@
     bannerSet($('temps-banner'), d.sensors.length ? '' : 'Brak odczytów z termometrów');
     d.sensors.forEach(function (s) {
       var tile = document.createElement('div');
-      tile.className = 'stat' + (s.stale ? ' stale' : '');
+      tile.className = 'stat' + (s.stale ? ' stale' : '') + (s.id === tempSel ? ' selected' : '');
+      tile.setAttribute('role', 'button');
+      tile.tabIndex = 0;
+      tile.addEventListener('click', function () { selectTemp(s.id); });
+      tile.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); selectTemp(s.id); } });
       var add = function (cls, text) {
         var e = document.createElement('span'); e.className = cls; e.textContent = text; tile.appendChild(e); return e;
       };
@@ -1016,6 +1038,152 @@
     }).catch(function () { bannerSet($('temps-banner'), 'Brak połączenia z panelem'); });
   }
 
+  // --- wykres temperatury po dotknięciu kafelka: ostatnie 24 h (tempDate null) albo wcześniejsza doba ---
+  var TEMP_CHART_POLL_MS = 60000;
+  var tempSel = null, tempDate = null, tempData = null, tempReq = 0, tempGeo = null;
+  var tempBox = $('temp-chart'), tempSvg = $('temp-svg'), tempTip = $('temp-tip');
+
+  function selectTemp(id) {
+    tempSel = tempSel === id ? null : id;       // drugie dotknięcie zamyka wykres
+    tempDate = null; tempData = null;
+    $('temp-card').hidden = !tempSel;
+    document.querySelectorAll('#temps .stat').forEach(function (t) { t.classList.remove('selected'); });
+    refreshTemps();
+    refreshTempChart();
+  }
+
+  function refreshTempChart() {
+    if (!tempSel) return;
+    var url = '/api/temps/history?id=' + encodeURIComponent(tempSel) + (tempDate ? '&date=' + tempDate : '');
+    var req = ++tempReq;
+    return fetch(url, { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      if (req !== tempReq) return;                // w międzyczasie zmieniono czujnik albo dzień
+      tempData = d;
+      updateTempNav();
+      drawTempChart();
+    }).catch(function () {});
+  }
+
+  function updateTempNav() {
+    var d = tempData;
+    if (d.date) {
+      var dt = parseDate(d.date);
+      setText('temp-title', DAYS[dt.getDay()] + ' ' + String(dt.getDate()).padStart(2, '0') + '.' +
+        String(dt.getMonth() + 1).padStart(2, '0') + '.' + dt.getFullYear());
+    } else setText('temp-title', 'Ostatnie 24 h');
+    $('temp-next').disabled = !d.date;
+    $('temp-prev').disabled = !d.first_date || (d.date || d.today) <= d.first_date;
+    $('temp-now').hidden = !d.date;
+    setText('temp-range', d.label + (d.min == null ? '' : ' · ' + num(d.min, 1) + ' – ' + num(d.max, 1) + ' °C'));
+  }
+
+  function goTempDay(date) {
+    tempDate = !tempData || date >= tempData.today ? null : date;
+    hideTempHover();
+    refreshTempChart();
+  }
+  $('temp-prev').addEventListener('click', function () { if (tempData) goTempDay(shiftDate(tempData.date || tempData.today, -1)); });
+  $('temp-next').addEventListener('click', function () { if (tempData && tempData.date) goTempDay(shiftDate(tempData.date, 1)); });
+  $('temp-now').addEventListener('click', function () { goTempDay('9999-12-31'); });
+
+  function tempSegments(points) {
+    // czujnik zgłasza się najrzadziej co godzinę - dłuższa przerwa to brak danych
+    var out = [], cur = [];
+    points.forEach(function (p, i) {
+      if (i > 0 && p[0] - points[i - 1][0] > 7200) { out.push(cur); cur = []; }
+      cur.push(p);
+    });
+    if (cur.length) out.push(cur);
+    return out;
+  }
+
+  function drawTempChart() {
+    if (!tempData) return;
+    var W = tempBox.clientWidth, H = 200, m = { l: 44, r: 6, t: 8, b: 22 };
+    if (!W) return;
+    var d = tempData, pts = d.points, pw = W - m.l - m.r, ph = H - m.t - m.b;
+    var span = d.end - d.start;
+    // oś temperatury: pełne stopnie wokół zakresu, co najmniej 2 °C
+    var lo = Math.floor((d.min == null ? 20 : d.min) - 0.3), hi = Math.ceil((d.max == null ? 22 : d.max) + 0.3);
+    if (hi - lo < 2) hi = lo + 2;
+    var step = hi - lo <= 6 ? 1 : hi - lo <= 12 ? 2 : 5;
+    lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+    var x = function (ts) { return m.l + (ts - d.start) / span * pw; };
+    var y = function (t) { return m.t + ph - (t - lo) / (hi - lo) * ph; };
+
+    tempSvg.textContent = '';
+    tempSvg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    for (var v = lo; v <= hi; v += step) {
+      el('line', { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: 'gridline' }, tempSvg);
+      el('text', { x: m.l - 6, y: y(v) + 4, 'text-anchor': 'end', class: 'axis' }, tempSvg).textContent = v + (v + step > hi ? ' °C' : '');
+    }
+    // podpisy co 6 h o pełnych godzinach czasu lokalnego (00, 06, 12, 18)
+    var tick = new Date(d.start * 1000);
+    if (tick.getMinutes() || tick.getSeconds()) tick.setHours(tick.getHours() + 1);
+    tick.setMinutes(0, 0, 0);
+    for (; tick.getTime() / 1000 <= d.end; tick.setHours(tick.getHours() + 1)) {
+      if (tick.getHours() % 6) continue;
+      var tx = x(tick.getTime() / 1000);
+      el('text', { x: tx, y: H - 4, 'text-anchor': tx < m.l + 18 ? 'start' : tx > W - m.r - 18 ? 'end' : 'middle', class: 'axis' }, tempSvg)
+        .textContent = String(tick.getHours()).padStart(2, '0') + ':00';
+    }
+
+    if (!pts.length) {
+      el('text', { x: m.l + pw / 2, y: m.t + ph / 2, 'text-anchor': 'middle', class: 'empty' }, tempSvg).textContent =
+        d.date ? 'Brak danych z tego dnia' : 'Brak odczytów z ostatnich 24 h';
+    }
+    tempSegments(pts).forEach(function (seg) {
+      if (seg.length === 1) {
+        el('circle', { cx: x(seg[0][0]), cy: y(seg[0][1]), r: 2.5, fill: 'var(--pv)' }, tempSvg);
+        return;
+      }
+      var line = seg.map(function (p, i) { return (i ? 'L' : 'M') + x(p[0]).toFixed(1) + ',' + y(p[1]).toFixed(1); }).join('');
+      el('path', { d: line, fill: 'none', stroke: 'var(--pv)', 'stroke-width': 2, 'stroke-linejoin': 'round' }, tempSvg);
+    });
+
+    var hover = el('g', { visibility: 'hidden' }, tempSvg);
+    var cross = el('line', { y1: m.t, y2: m.t + ph, stroke: 'var(--muted)', 'stroke-width': 1 }, hover);
+    var dot = el('circle', { r: 4.5, fill: 'var(--pv)', stroke: 'var(--panel)', 'stroke-width': 2 }, hover);
+    tempGeo = { x: x, y: y, m: m, pw: pw, W: W, start: d.start, span: span, pts: pts, hover: hover, cross: cross, dot: dot };
+    tempTip.hidden = true;
+  }
+
+  function onTempHover(ev) {
+    var g = tempGeo;
+    if (!g || !g.pts.length) return;
+    var rect = tempSvg.getBoundingClientRect();
+    var px = (ev.clientX - rect.left) * g.W / rect.width;
+    var ts = g.start + (px - g.m.l) / g.pw * g.span;
+    var pts = g.pts, lo = 0, hi = pts.length - 1;
+    while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (pts[mid][0] < ts) lo = mid; else hi = mid; }
+    var p = Math.abs(pts[lo][0] - ts) <= Math.abs(pts[hi][0] - ts) ? pts[lo] : pts[hi];
+    if (Math.abs(p[0] - ts) > 3600) { hideTempHover(); return; }
+    var cx = g.x(p[0]);
+    g.hover.setAttribute('visibility', 'visible');
+    g.cross.setAttribute('x1', cx); g.cross.setAttribute('x2', cx);
+    g.dot.setAttribute('cx', cx); g.dot.setAttribute('cy', g.y(p[1]));
+    tempTip.textContent = '';
+    var t = document.createElement('div'); t.className = 't'; t.textContent = hhmm(p[0]);
+    tempTip.appendChild(t);
+    var css = getComputedStyle(document.documentElement);
+    tempTip.appendChild(tipRow(css.getPropertyValue('--pv'), num(p[1], 1) + ' °C', 'Temperatura'));
+    if (p[2] != null) tempTip.appendChild(tipRow('transparent', num(p[2], 0) + '%', 'Wilgotność'));
+    tempTip.hidden = false;
+    var sx = cx * rect.width / g.W, tw = tempTip.offsetWidth;
+    tempTip.style.left = (sx + 12 + tw > rect.width ? sx - 12 - tw : sx + 12) + 'px';
+  }
+  function hideTempHover() {
+    if (tempGeo) tempGeo.hover.setAttribute('visibility', 'hidden');
+    tempTip.hidden = true;
+  }
+  tempSvg.addEventListener('pointermove', onTempHover);
+  tempSvg.addEventListener('pointerdown', onTempHover);
+  tempSvg.addEventListener('pointerleave', hideTempHover);
+  window.addEventListener('resize', drawTempChart);
+
   // --- odświeżanie tylko widocznej zakładki, wstrzymane gdy karta jest w tle ---
   var timers = [];
   function every(fn, ms) { fn(); timers.push(setInterval(fn, ms)); }
@@ -1027,7 +1195,11 @@
     if (tab === 'oswietlenie') every(refresh, POLL_MS);
     if (tab === 'pv') { every(refreshPv, PV_POLL_MS); every(refreshDay, DAY_POLL_MS); every(refreshMonths, DAY_POLL_MS); }
     if (tab === 'ogrzewanie') { every(refreshHeat, HEAT_POLL_MS); timers.push(setInterval(tickHeat, 1000)); }
-    if (tab === 'temperatury') every(refreshTemps, TEMPS_POLL_MS);
+    if (tab === 'temperatury') {
+      every(refreshTemps, TEMPS_POLL_MS);
+      // wcześniejsza doba się nie zmienia - odświeżane są tylko ostatnie 24 h
+      every(function () { if (!tempDate) refreshTempChart(); }, TEMP_CHART_POLL_MS);
+    }
   }
   document.addEventListener('visibilitychange', schedule);
   schedule();

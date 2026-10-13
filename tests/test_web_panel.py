@@ -353,6 +353,11 @@ class FakeThermometers:
         return {'sensors': [{'id': 'kuchnia', 'label': 'Kuchnia', 'temperature': 21.4, 'humidity': 55.4,
                              'battery': 100, 'linkquality': 92, 'ts': 1000000, 'stale': False}]}
 
+    def history(self, name, date=None):
+        if date == 'zle':
+            raise ValueError('zła data')
+        return {'id': name, 'date': date, 'points': [[1, 20.5, 50]]}
+
 
 class TempsHttpTest(unittest.TestCase):
     def serve(self, temps):
@@ -369,6 +374,22 @@ class TempsHttpTest(unittest.TestCase):
         self.assertEqual(resp.status, 200)
         self.assertEqual(data['sensors'][0]['label'], 'Kuchnia')
         self.assertEqual(data['sensors'][0]['temperature'], 21.4)
+
+    def get(self, base, path):
+        try:
+            with urllib.request.urlopen(base + path, timeout=5) as resp:
+                return resp.status, json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    def test_history(self):
+        base = self.serve(FakeThermometers())
+        self.assertEqual(self.get(base, '/api/temps/history?id=pok%C3%B3j%20Oli&date=2026-10-12'),
+                         (200, {'id': 'pokój Oli', 'date': '2026-10-12', 'points': [[1, 20.5, 50]]}))
+        self.assertEqual(self.get(base, '/api/temps/history?id=kuchnia')[1]['date'], None)
+        self.assertEqual(self.get(base, '/api/temps/history')[0], 400)
+        self.assertEqual(self.get(base, '/api/temps/history?id=kuchnia&date=zle'), (400, {'error': 'zła data'}))
+        self.assertEqual(self.get(self.serve(None), '/api/temps/history?id=kuchnia')[0], 503)
 
     def test_temps_disabled(self):
         with self.assertRaises(urllib.error.HTTPError) as cm:

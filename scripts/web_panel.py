@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import dzarwis_global_vars as dgv
 import energia
+import harmonogram
 import pompa
 import termometry
 from lights_v2_ import ModbusError, MODBUS_TIMEOUT, read_registers
@@ -44,6 +45,8 @@ WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web')
 ENERGY_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'energia.db')
 # historia odczytów termometrów
 TEMPS_DB = os.path.join(os.path.dirname(ENERGY_DB), 'termometry.db')
+# zdarzenia harmonogramu świateł
+SCHEDULE_FILE = os.path.join(os.path.dirname(ENERGY_DB), 'harmonogram.json')
 
 # jedyne pliki, które serwer wydaje: ścieżka URL -> (plik w WEB_DIR, typ)
 STATIC = {
@@ -62,6 +65,13 @@ HEAT_ACTIONS = {
     '/api/heat/pumps': lambda hp, r: hp.pumps(co_min=r.get('co_min', 0), kol_min=r.get('kol_min', 0)),
     '/api/heat/pumps/stop': lambda hp, r: hp.stop_pumps(),
     '/api/heat/manual': lambda hp, r: hp.manual_heating(r['hours']),
+}
+
+# zmiany harmonogramu: ścieżka -> wywołanie z treścią JSON
+SCHEDULE_ACTIONS = {
+    '/api/schedule': lambda s, r: s.add(r),
+    '/api/schedule/update': lambda s, r: s.update(r.get('id'), r),
+    '/api/schedule/delete': lambda s, r: s.delete(r.get('id')),
 }
 
 
@@ -105,14 +115,15 @@ class Panel:
         if new_value != value:
             self._write(reg, new_value)
 
-    def _all_off(self):
+    def _set_all(self, on):
         masks = {}
         for reg, bit in self.addr.values():
             masks[reg] = masks.get(reg, 0) | (1 << bit)
         for reg, mask in sorted(masks.items()):
             value = read_registers(self.mb, reg, 1)[0]
-            if value & mask:
-                self._write(reg, value & ~mask)
+            new_value = value | mask if on else value & ~mask
+            if new_value != value:
+                self._write(reg, new_value)
 
     def lights(self):
         return self._modbus(self._lights)
@@ -123,11 +134,15 @@ class Panel:
         self._modbus(self._set_light, light_id, on)
 
     def all_off(self):
-        self._modbus(self._all_off)
+        self._modbus(self._set_all, False)
+
+    def all_on(self):
+        self._modbus(self._set_all, True)
 
 
-def make_handler(panel, web_dir, energy=None, heat=None, temps=None):
-    # energy: energia.Collector, heat: pompa.HeatPump, temps: termometry.Thermometers; None = zakładka wyłączona
+def make_handler(panel, web_dir, energy=None, heat=None, temps=None, schedule=None):
+    # energy: energia.Collector, heat: pompa.HeatPump, temps: termometry.Thermometers,
+    # schedule: harmonogram.Scheduler; None = zakładka wyłączona
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status, body, ctype):
             self.send_response(status)
@@ -193,6 +208,8 @@ def make_handler(panel, web_dir, energy=None, heat=None, temps=None):
                 self._pv(energy.months() if energy else None)
             elif self.path == '/api/heat':
                 self._heat(None)
+            elif self.path == '/api/schedule':
+                self._schedule(None)
             elif self.path == '/api/temps':
                 if temps is None:
                     self._json(503, {'error': 'Obsługa termometrów wyłączona'})
@@ -215,8 +232,32 @@ def make_handler(panel, web_dir, energy=None, heat=None, temps=None):
                 self._api(panel.all_off)
             elif self.path in HEAT_ACTIONS:
                 self._heat(raw)
+            elif self.path in SCHEDULE_ACTIONS:
+                self._schedule(raw)
             else:
                 self._json(404, {'error': 'Nie znaleziono'})
+
+        def _schedule(self, raw):
+            # raw None = sam odczyt; inaczej zmiana z SCHEDULE_ACTIONS
+            if schedule is None:
+                self._json(503, {'error': 'Harmonogram wyłączony'})
+                return
+            try:
+                if raw is not None:
+                    try:
+                        req = json.loads(raw.decode('utf-8'))
+                        if not isinstance(req, dict):
+                            raise ValueError
+                    except ValueError:
+                        raise ValueError('niepoprawne dane')
+                    SCHEDULE_ACTIONS[self.path](schedule, req)
+                    log.info('%s: harmonogram %s %s', self.client_address[0], self.path, raw.decode('utf-8', 'replace'))
+                self._json(200, schedule.snapshot())
+            except ValueError as e:
+                self._json(400, {'error': str(e)})
+            except Exception:
+                log.exception('nieobsłużony błąd')
+                self._json(500, {'error': 'Błąd serwera'})
 
         def _heat(self, raw):
             # raw None = sam odczyt; inaczej polecenie dla pompy z HEAT_ACTIONS
@@ -280,7 +321,10 @@ def main():
     heat.start()
     temps = termometry.Thermometers(store=termometry.TempStore(TEMPS_DB))
     temps.start()
-    server = ThreadingHTTPServer(('', PORT), make_handler(Panel(mb), WEB_DIR, collector, heat, temps))
+    panel = Panel(mb)
+    schedule = harmonogram.Scheduler(panel, SWIATLA, SCHEDULE_FILE)
+    schedule.start()
+    server = ThreadingHTTPServer(('', PORT), make_handler(panel, WEB_DIR, collector, heat, temps, schedule))
     log.info('panel WWW na porcie %s, WAGO %s:%s, energia %s', PORT, dgv.PLC.ip, dgv.PLC.port, energia.GATEWAY_IP)
     server.serve_forever()
 

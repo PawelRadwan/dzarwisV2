@@ -59,10 +59,26 @@ Pompa ciepła (sterownik Quotek `192.168.1.31`) — wyłącznie przez narzędzie
 
 Każda akcja wymaga potwierdzenia i trafia do dziennika (`journalctl -u web.service`). Stan „do kiedy” pomp i ręcznego grzania: `data/pompa-stan.json` (wspólny dla telefonów, przetrwa restart). Odczyt co 5 s tylko przy otwartej zakładce (w tle panel czyta sterownik co 5 s zawsze).
 
+## Zakładka Harmonogram
+
+Zdarzenia dla świateł o stałej godzinie, np. „zgaś wszystkie światła o północy”. Działają także przy zamkniętej stronie.
+
+- **Lista:** zdarzenia według godziny, u góry najbliższe („Następne: jutro o 00:00, …”). Przełącznik w wierszu włącza i wyłącza zdarzenie bez usuwania.
+- **Dodawanie:** „+ Dodaj zdarzenie” — godzina, Zgaś/Włącz, jeden obwód albo Wszystkie, dni tygodnia (domyślnie wszystkie = „Codziennie”). Dotknięcie zdarzenia otwiera jego edycję i usuwanie.
+- **Północ:** 00:00 należy już do nowego dnia — zdarzenie 00:00 ustawione na piątek wykona się w nocy z czwartku na piątek. „24:00” wysłane przez API jest zapisywane jako 00:00.
+- **Czas:** zegar Pi.
+- **Brak łączności z WAGO:** próba co 30 s przez 5 minut, potem zdarzenie przepada (wpis w dzienniku). Zaległe wykonują się po kolei, żeby późniejsze zgaszenie nie zostało nadpisane starszym włączeniem.
+- **Pi albo `web.service` wyłączone o tej godzinie:** zdarzenie przepada, nie wykonuje się po starcie.
+- **Ręczne zmiany:** światło włączone po zdarzeniu zostaje włączone do następnego zdarzenia. Bojlera harmonogram nie rusza.
+
+Zdarzenia: `data/harmonogram.json` (poza gitem). Uszkodzony plik jest odkładany jako `harmonogram.json.zly`, a harmonogram startuje pusty; zdarzenie z obwodem usuniętym z `SWIATLA` jest pomijane przy starcie (w obu przypadkach wpis w dzienniku). Wykonania: `journalctl -u web.service | grep harmonogram`.
+
 ## Budowa
 
 ```
 telefon ──HTTP :80──► web_panel.py (web.service) ──Modbus TCP──► WAGO 192.168.8.5
+                           ├─ harmonogram.py (wątek) ──► to samo połączenie z WAGO
+                           │       └─► data/harmonogram.json
                            └─ energia.py (wątek) ──Modbus TCP──► bramka 192.168.8.40 (Growatt, SDM630)
                                    └─► data/energia.db (SQLite)
 przyciski ścienne ──► WAGO ◄──Modbus TCP── lights_v2_.py (lights.service)
@@ -73,6 +89,7 @@ przyciski ścienne ──► WAGO ◄──Modbus TCP── lights_v2_.py (light
 | `scripts/web_panel.py` | serwer HTTP (`http.server` z biblioteki standardowej) + obsługa Modbus |
 | `scripts/energia.py` | odczyt falownika i licznika, minutowa historia w SQLite, bilans dnia |
 | `scripts/pompa.py` | pompa ciepła przez `kotek_rpi`: odczyt, program, pompy, ręczne grzanie; tylko dozwolone polecenia |
+| `scripts/harmonogram.py` | zdarzenia świateł o stałej godzinie: walidacja, zapis, wykonywanie w tle |
 | `scripts/web/index.html` | cała strona: HTML, CSS i JS w jednym pliku, bez bibliotek z internetu |
 | `scripts/web/manifest.json`, `icon-192.png`, `icon-512.png` | ikona i nazwa na ekranie głównym telefonu |
 | `deploy/systemd/web.service` | usługa systemd |
@@ -97,6 +114,10 @@ Serwer wydaje tylko pliki z listy `STATIC` w `web_panel.py` — nic innego z dys
 | `POST /api/heat/manual` | `{"hours": 0.5..8}` | stan pompy |
 | `GET /api/temps` | — | termometry Zigbee: `sensors` (lista: `id`, `label`, `temperature`, `humidity`, `battery`, `linkquality`, `ts`, `stale`) — [termometry.md](termometry.md) |
 | `GET /api/temps/history?id=…[&date=RRRR-MM-DD]` | — | historia czujnika do wykresu: ostatnie 24 h albo wskazana doba (`points`, `min`, `max`, `start`, `end`) |
+| `GET /api/schedule` | — | `events` (`id`, `time`, `on`, `target`, `label`, `days`, `enabled`), `lights`, `next` (najbliższe zdarzenie z `in_days`, `weekday`; może być `null`) |
+| `POST /api/schedule` | `{"time": "00:00", "on": false, "target": "all" lub id obwodu, "days": [0..6], "enabled": true}` (0 = poniedziałek; `enabled` opcjonalne) | harmonogram jak wyżej |
+| `POST /api/schedule/update` | `{"id": "…"}` + pola do zmiany | harmonogram jak wyżej |
+| `POST /api/schedule/delete` | `{"id": "…"}` | harmonogram jak wyżej |
 | `GET /api/pv/months` | — | `{"since": ts, "totals": {...}, "months": [{"month": "2026-09", "from_day": 18, "import_kwh", "export_kwh", "pv_kwh", "home_kwh", "self_use_pct"}, …]}` |
 | `GET /api/pv/day?date=RRRR-MM-DD` | — | `{"date": "2026-09-18", "points": [[ts, pv_w, home_w], …]}` — dzisiejsze minuty |
 

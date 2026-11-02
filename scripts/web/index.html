@@ -71,7 +71,13 @@
     padding: 7px 4px; min-height: 40px; border-radius: 9px; line-height: 1.15;
     color: var(--muted); text-decoration: none; font-weight: 600; font-size: 15px;
   }
-  @media (max-width: 430px) { nav a { font-size: 13px; padding: 7px 2px; } }   /* cztery zakładki na wąskim telefonie */
+  nav a .short { display: none; }
+  @media (max-width: 700px) {   /* pięć zakładek na telefonie - krótkie nazwy */
+    nav a { font-size: 13px; padding: 7px 2px; }
+    nav a .long { display: none; }
+    nav a .short { display: inline; }
+  }
+  @media (max-width: 350px) { nav a { font-size: 11px; padding: 7px 1px; } }
   nav a[aria-current="page"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
   main { padding: 14px 16px 24px; max-width: 900px; margin: 0 auto; }
   .banner {
@@ -204,6 +210,47 @@
   .badge.missed { border-color: var(--danger); color: var(--danger); }
   .actions-list li.done { color: var(--muted); }
   .heat-offline .ctrl { opacity: .45; pointer-events: none; }
+  .sch-next { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--line); font-size: 14px; }
+  .sch-empty { padding: 32px 8px; text-align: center; color: var(--muted); }
+  .sch-row { display: flex; align-items: center; margin-bottom: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+  .sch-row.disabled .sch-open { opacity: .5; }
+  .sch-open {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+    border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; touch-action: manipulation;
+  }
+  .sch-time { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .sch-what { display: block; font-weight: 650; }
+  .sch-days { display: block; margin-top: 2px; font-size: 13px; color: var(--muted); }
+  .switch {
+    flex: none; width: 44px; height: 26px; margin: 0 14px 0 0; padding: 0; border: 0; border-radius: 13px;
+    background: var(--line); position: relative; cursor: pointer; touch-action: manipulation;
+  }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: left .12s; }
+  .switch[aria-checked="true"] { background: var(--accent); }
+  .switch[aria-checked="true"]::after { left: 21px; }
+  .sch-add { display: block; width: 100%; margin-top: 12px; padding: 14px; }
+  .sheet-back { position: fixed; inset: 0; z-index: 3; display: flex; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.45); }
+  .sheet {
+    width: 100%; max-width: 520px; max-height: 92vh; overflow-y: auto; background: var(--panel); border-radius: 18px 18px 0 0;
+    padding: 16px 16px calc(env(safe-area-inset-bottom) + 16px);
+  }
+  .sheet h2 { margin: 0 0 4px; font-size: 18px; }
+  .sheet-label { display: block; margin: 12px 0 5px; font-size: 14px; color: var(--muted); }
+  .sheet input, .sheet select {
+    display: block; width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font: inherit;
+  }
+  .sheet input[type="time"] { font-size: 24px; font-weight: 700; text-align: center; color-scheme: light dark; }
+  .seg { display: flex; gap: 6px; }
+  .seg button {
+    flex: 1; min-width: 0; min-height: 42px; padding: 0; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--muted);
+    font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; touch-action: manipulation;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .sheet-hint { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+  .sheet-error { margin: 12px 0 0; color: var(--danger); font-weight: 600; font-size: 14px; }
+  .sheet-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .sheet-actions .btn { flex: 1; }
   .soon { padding: 48px 8px; text-align: center; color: var(--muted); }
   .soon strong { display: block; font-size: 18px; color: var(--text); margin-bottom: 6px; }
   [hidden] { display: none !important; }
@@ -213,10 +260,11 @@
 <header>
   <h1>Dżarwis</h1>
   <nav>
-    <a href="#oswietlenie" data-tab="oswietlenie">Oświetlenie</a>
-    <a href="#pv" data-tab="pv">Energia elektryczna</a>
-    <a href="#ogrzewanie" data-tab="ogrzewanie">Ogrzewanie</a>
-    <a href="#temperatury" data-tab="temperatury">Temperatury</a>
+    <a href="#oswietlenie" data-tab="oswietlenie"><span class="long">Oświetlenie</span><span class="short">Oświetl.</span></a>
+    <a href="#pv" data-tab="pv"><span class="long">Energia elektryczna</span><span class="short">Energia</span></a>
+    <a href="#ogrzewanie" data-tab="ogrzewanie"><span class="long">Ogrzewanie</span><span class="short">Ogrzew.</span></a>
+    <a href="#temperatury" data-tab="temperatury"><span class="long">Temperatury</span><span class="short">Temp.</span></a>
+    <a href="#harmonogram" data-tab="harmonogram"><span class="long">Harmonogram</span><span class="short">Harmon.</span></a>
   </nav>
 </header>
 
@@ -392,7 +440,48 @@
       </div>
     </div>
   </section>
+  <section id="harmonogram" hidden>
+    <div class="banner pv-banner" id="sch-banner" role="alert" hidden></div>
+    <p class="sch-next" id="sch-next" hidden></p>
+    <div id="sch-list"></div>
+    <p class="sch-empty" id="sch-empty" hidden>Nie ma jeszcze żadnych zdarzeń.</p>
+    <button class="btn sch-add" id="sch-add" type="button">+ Dodaj zdarzenie</button>
+  </section>
 </main>
+
+<div class="sheet-back" id="sch-sheet-back" hidden>
+  <form class="sheet" id="sch-form" role="dialog" aria-modal="true" aria-labelledby="sch-form-title" novalidate>
+    <h2 id="sch-form-title">Nowe zdarzenie</h2>
+    <label class="sheet-label" for="sch-time">Godzina</label>
+    <input id="sch-time" type="time" required>
+    <span class="sheet-label">Co zrobić</span>
+    <div class="seg" id="sch-action">
+      <button type="button" data-on="false">Zgaś</button>
+      <button type="button" data-on="true">Włącz</button>
+    </div>
+    <label class="sheet-label" for="sch-target">Które światło</label>
+    <select id="sch-target"></select>
+    <span class="sheet-label">Dni</span>
+    <div class="seg" id="sch-days">
+      <button type="button" data-day="0">pn</button>
+      <button type="button" data-day="1">wt</button>
+      <button type="button" data-day="2">śr</button>
+      <button type="button" data-day="3">cz</button>
+      <button type="button" data-day="4">pt</button>
+      <button type="button" data-day="5">so</button>
+      <button type="button" data-day="6">nd</button>
+    </div>
+    <p class="sheet-hint" id="sch-midnight" hidden>00:00 to już początek wybranego dnia: piątek oznacza noc z czwartku na piątek.</p>
+    <p class="sheet-error" id="sch-error" role="alert" hidden></p>
+    <div class="sheet-actions">
+      <button class="btn" id="sch-cancel" type="button">Anuluj</button>
+      <button class="btn primary" id="sch-save" type="submit">Zapisz</button>
+    </div>
+    <div class="sheet-actions" id="sch-delete-row">
+      <button class="btn danger" id="sch-delete" type="button">Usuń zdarzenie</button>
+    </div>
+  </form>
+</div>
 
 <template id="tile">
   <button class="tile" type="button">
@@ -1184,6 +1273,172 @@
   tempSvg.addEventListener('pointerleave', hideTempHover);
   window.addEventListener('resize', drawTempChart);
 
+  // --- harmonogram ---
+  var SCH_POLL_MS = 30000;
+  var DAY_NAMES = ['pn', 'wt', 'śr', 'cz', 'pt', 'so', 'nd'];
+  var DAY_ACCUSATIVE = ['w poniedziałek', 'we wtorek', 'w środę', 'w czwartek', 'w piątek', 'w sobotę', 'w niedzielę'];
+  var schSheet = $('sch-sheet-back');
+  var schEditId = null;       // id edytowanego zdarzenia; null = nowe
+  var schOn = false;          // wybrana akcja w formularzu
+  var schDays = [];           // wybrane dni w formularzu
+  var schVersion = 0;         // jak version przy światłach: odpowiedzi odświeżania sprzed zmiany są odrzucane
+
+  function schBanner(text) {
+    $('sch-banner').hidden = !text;
+    $('sch-banner').textContent = text || '';
+  }
+  function schMessage(err) {
+    // TypeError = fetch nie dotarł do serwera; pozostałe błędy niosą komunikat z API
+    return err instanceof TypeError ? 'Brak połączenia z panelem' : err.message;
+  }
+  function schWhat(e) {
+    return (e.on ? 'Włącz: ' : 'Zgaś: ') + (e.target === 'all' ? 'wszystkie światła' : e.label);
+  }
+  function schDaysText(days) {
+    if (days.length === 7) return 'Codziennie';
+    return days.map(function (d) { return DAY_NAMES[d]; }).join(' ');
+  }
+  function schWhen(n) {
+    if (n.in_days === 0) return 'dziś o ' + n.time;
+    if (n.in_days === 1) return 'jutro o ' + n.time;
+    return DAY_ACCUSATIVE[n.weekday] + ' o ' + n.time;
+  }
+
+  function renderSchedule(d) {
+    var sel = $('sch-target');
+    if (!sel.options.length) {
+      sel.add(new Option('Wszystkie', 'all'));
+      d.lights.forEach(function (l) { sel.add(new Option(l.label, l.id)); });
+    }
+    $('sch-next').hidden = !d.next;
+    if (d.next) {
+      // mała litera tylko w czasowniku: nazwy obwodów (np. „Paweł”) zostają bez zmian
+      var nextWhat = schWhat(d.next);
+      $('sch-next').textContent = 'Następne: ' + schWhen(d.next) + ', ' + nextWhat.charAt(0).toLowerCase() + nextWhat.slice(1);
+    }
+    $('sch-empty').hidden = d.events.length > 0;
+    var list = $('sch-list');
+    list.textContent = '';
+    d.events.forEach(function (e) {
+      var row = document.createElement('div');
+      row.className = 'sch-row' + (e.enabled ? '' : ' disabled');
+      var open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'sch-open';
+      var time = document.createElement('span');
+      time.className = 'sch-time';
+      time.textContent = e.time;
+      var text = document.createElement('span');
+      var what = document.createElement('span');
+      what.className = 'sch-what';
+      what.textContent = schWhat(e);
+      var days = document.createElement('span');
+      days.className = 'sch-days';
+      days.textContent = schDaysText(e.days);
+      text.appendChild(what);
+      text.appendChild(days);
+      open.appendChild(time);
+      open.appendChild(text);
+      open.addEventListener('click', function () { openSheet(e); });
+      var sw = document.createElement('button');
+      sw.type = 'button';
+      sw.className = 'switch';
+      sw.setAttribute('role', 'switch');
+      sw.setAttribute('aria-checked', e.enabled ? 'true' : 'false');
+      sw.setAttribute('aria-label', 'Zdarzenie aktywne: ' + e.time + ', ' + schWhat(e));
+      sw.addEventListener('click', function () {
+        schSend('/api/schedule/update', { id: e.id, enabled: !e.enabled }).catch(function (err) { schBanner(schMessage(err)); });
+      });
+      row.appendChild(open);
+      row.appendChild(sw);
+      list.appendChild(row);
+    });
+  }
+
+  function refreshSchedule() {
+    var v = schVersion;
+    return api('GET', '/api/schedule').then(function (d) {
+      if (v !== schVersion) return;
+      schBanner(null);
+      renderSchedule(d);
+    }).catch(function () {
+      if (v === schVersion) schBanner('Brak połączenia z panelem');
+    });
+  }
+
+  function schSend(path, body) {
+    schVersion++;
+    return api('POST', path, body).then(function (d) {
+      schVersion++;
+      schBanner(null);
+      renderSchedule(d);
+    });
+  }
+
+  function schPaint() {
+    $('sch-action').querySelectorAll('button').forEach(function (b) {
+      b.setAttribute('aria-pressed', (b.dataset.on === 'true') === schOn ? 'true' : 'false');
+    });
+    $('sch-days').querySelectorAll('button').forEach(function (b) {
+      b.setAttribute('aria-pressed', schDays.indexOf(+b.dataset.day) >= 0 ? 'true' : 'false');
+    });
+    $('sch-midnight').hidden = !($('sch-time').value === '00:00' && schDays.length < 7);
+  }
+  function schError(text) {
+    $('sch-error').hidden = !text;
+    $('sch-error').textContent = text || '';
+  }
+  function openSheet(e) {
+    schEditId = e ? e.id : null;
+    $('sch-form-title').textContent = e ? 'Zmień zdarzenie' : 'Nowe zdarzenie';
+    $('sch-time').value = e ? e.time : '00:00';
+    $('sch-target').value = e ? e.target : 'all';
+    schOn = e ? e.on : false;
+    schDays = e ? e.days.slice() : [0, 1, 2, 3, 4, 5, 6];
+    $('sch-delete-row').hidden = !e;
+    schError(null);
+    schPaint();
+    schSheet.hidden = false;
+  }
+  function closeSheet() { schSheet.hidden = true; }
+
+  $('sch-add').addEventListener('click', function () { openSheet(null); });
+  $('sch-cancel').addEventListener('click', closeSheet);
+  schSheet.addEventListener('click', function (ev) { if (ev.target === schSheet) closeSheet(); });
+  $('sch-time').addEventListener('input', schPaint);
+  $('sch-action').addEventListener('click', function (ev) {
+    if (!ev.target.dataset.on) return;
+    schOn = ev.target.dataset.on === 'true';
+    schPaint();
+  });
+  $('sch-days').addEventListener('click', function (ev) {
+    if (!ev.target.dataset.day) return;
+    var day = +ev.target.dataset.day, i = schDays.indexOf(day);
+    if (i >= 0) schDays.splice(i, 1); else schDays.push(day);
+    schPaint();
+  });
+  function schBusy(promise) {
+    var buttons = [$('sch-save'), $('sch-delete')];
+    buttons.forEach(function (b) { b.disabled = true; });
+    return promise.then(closeSheet).catch(function (err) {
+      schError(schMessage(err));
+    }).then(function () {
+      buttons.forEach(function (b) { b.disabled = false; });
+    });
+  }
+  $('sch-form').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    if (!$('sch-time').value) { schError('Podaj godzinę'); return; }
+    if (!schDays.length) { schError('Wybierz co najmniej jeden dzień'); return; }
+    var body = { time: $('sch-time').value, on: schOn, target: $('sch-target').value, days: schDays };
+    if (schEditId) body.id = schEditId;
+    schBusy(schSend(schEditId ? '/api/schedule/update' : '/api/schedule', body));
+  });
+  $('sch-delete').addEventListener('click', function () {
+    if (!confirm('Usunąć to zdarzenie?')) return;
+    schBusy(schSend('/api/schedule/delete', { id: schEditId }));
+  });
+
   // --- odświeżanie tylko widocznej zakładki, wstrzymane gdy karta jest w tle ---
   var timers = [];
   function every(fn, ms) { fn(); timers.push(setInterval(fn, ms)); }
@@ -1195,6 +1450,7 @@
     if (tab === 'oswietlenie') every(refresh, POLL_MS);
     if (tab === 'pv') { every(refreshPv, PV_POLL_MS); every(refreshDay, DAY_POLL_MS); every(refreshMonths, DAY_POLL_MS); }
     if (tab === 'ogrzewanie') { every(refreshHeat, HEAT_POLL_MS); timers.push(setInterval(tickHeat, 1000)); }
+    if (tab === 'harmonogram') every(refreshSchedule, SCH_POLL_MS);
     if (tab === 'temperatury') {
       every(refreshTemps, TEMPS_POLL_MS);
       // wcześniejsza doba się nie zmienia - odświeżane są tylko ostatnie 24 h

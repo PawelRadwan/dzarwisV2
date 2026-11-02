@@ -1,7 +1,9 @@
 # testy panelu WWW na symulowanym WAGO: python3 -m unittest discover -s tests
+import datetime
 import json
 import os
 import sys
+import tempfile
 import threading
 import types
 import unittest
@@ -48,6 +50,7 @@ sys.modules.setdefault('pyModbusTCP', fake_pkg)
 sys.modules.setdefault('pyModbusTCP.client', fake_client)
 
 import dzarwis_global_vars as dgv  # noqa: E402
+import harmonogram  # noqa: E402
 import web_panel  # noqa: E402
 
 
@@ -114,6 +117,18 @@ class PanelTest(unittest.TestCase):
         self.assertEqual(is_on(self.mb, 'bojler mieszadlo'), 1)
         self.assertEqual(sorted(r for r, _ in self.mb.writes), [512, 513])
 
+    def test_all_on_only_lights_one_write_per_register(self):
+        self.panel.all_on()
+        self.assertTrue(all(l['on'] for l in self.panel.lights()))
+        self.assertEqual(is_on(self.mb, 'bojler grzanie'), 0)
+        self.assertEqual(is_on(self.mb, 'bojler mieszadlo'), 0)
+        self.assertEqual(sorted(r for r, _ in self.mb.writes), [512, 513])
+
+    def test_all_on_keeps_boiler_running(self):
+        turn_on(self.mb, 'bojler grzanie')
+        self.panel.all_on()
+        self.assertEqual(is_on(self.mb, 'bojler grzanie'), 1)
+
     def test_unknown_light(self):
         with self.assertRaises(KeyError):
             self.panel.set_light('bojler grzanie', True)
@@ -123,6 +138,95 @@ class PanelTest(unittest.TestCase):
         with self.assertRaises(web_panel.ModbusError):
             self.panel.lights()
         self.assertGreaterEqual(self.mb.closes, 1)
+
+
+class ScheduleHttpTest(unittest.TestCase):
+    def setUp(self):
+        self.mb = FakeModbusClient()
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        panel = web_panel.Panel(self.mb)
+        self.schedule = harmonogram.Scheduler(panel, web_panel.SWIATLA, os.path.join(self.dir.name, 'h.json'))
+        handler = web_panel.make_handler(panel, web_panel.WEB_DIR, schedule=self.schedule)
+        self.server = web_panel.ThreadingHTTPServer(('127.0.0.1', 0), handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.base = 'http://127.0.0.1:%d' % self.server.server_address[1]
+        self.addCleanup(self.server.server_close)
+        self.addCleanup(self.server.shutdown)
+
+    def request(self, path, body=None, raw=None):
+        data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
+        req = urllib.request.Request(self.base + path, data=data, method='POST' if data is not None else 'GET')
+        try:
+            with urllib.request.urlopen(req, timeout=5) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    EVENT = {'time': '00:00', 'on': False, 'target': 'all', 'days': [0, 1, 2, 3, 4, 5, 6]}
+
+    def test_add_edit_delete(self):
+        status, data = self.request('/api/schedule', self.EVENT)
+        self.assertEqual(status, 200)
+        event_id = data['events'][0]['id']
+        self.assertEqual(data['events'][0]['label'], 'Wszystkie')
+        self.assertEqual(len(data['lights']), 18)
+
+        status, data = self.request('/api/schedule/update', {'id': event_id, 'enabled': False})
+        self.assertEqual(status, 200)
+        self.assertFalse(data['events'][0]['enabled'])
+
+        status, data = self.request('/api/schedule/delete', {'id': event_id})
+        self.assertEqual(status, 200)
+        self.assertEqual(data['events'], [])
+        self.assertEqual(self.request('/api/schedule')[1]['events'], [])
+
+    def test_bad_requests(self):
+        cases = [
+            ('/api/schedule', dict(self.EVENT, time='99:00')),
+            ('/api/schedule/update', {'id': 'nie ma', 'enabled': False}),
+            ('/api/schedule/update', {'enabled': False}),
+            ('/api/schedule/delete', {'id': 'nie ma'}),
+            ('/api/schedule/delete', {}),
+            ('/api/schedule', [1, 2]),
+        ]
+        for path, body in cases:
+            with self.subTest(path=path, body=body):
+                status, data = self.request(path, body)
+                self.assertEqual(status, 400)
+                self.assertIn('error', data)
+        self.assertEqual(self.request('/api/schedule', raw=b'{zly json')[0], 400)
+
+    def test_scheduled_event_switches_real_outputs(self):
+        # przez prawdziwy Panel na symulowanym WAGO: wszystkie gasną, bojler zostaje
+        turn_on(self.mb, 'swiatlo kuchnia')
+        turn_on(self.mb, 'bojler grzanie')
+        self.schedule.clock = lambda: datetime.datetime(2026, 11, 3, 0, 0, 0)
+        self.request('/api/schedule', self.EVENT)
+        self.schedule.tick()
+        self.assertEqual(is_on(self.mb, 'swiatlo kuchnia'), 0)
+        self.assertEqual(is_on(self.mb, 'bojler grzanie'), 1)
+
+    def test_wago_failure_during_tick_is_retried_on_real_panel(self):
+        turn_on(self.mb, 'swiatlo kuchnia')
+        self.schedule.clock = lambda: datetime.datetime(2026, 11, 3, 0, 0, 0)
+        self.request('/api/schedule', self.EVENT)
+        self.mb.fail = True
+        self.schedule.tick()
+        self.mb.fail = False
+        self.schedule.clock = lambda: datetime.datetime(2026, 11, 3, 0, 1, 0)
+        self.schedule.tick()
+        self.assertEqual(is_on(self.mb, 'swiatlo kuchnia'), 0)
+
+    def test_disabled_without_scheduler(self):
+        handler = web_panel.make_handler(web_panel.Panel(self.mb), web_panel.WEB_DIR)
+        server = web_panel.ThreadingHTTPServer(('127.0.0.1', 0), handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.base = 'http://127.0.0.1:%d' % server.server_address[1]
+        self.assertEqual(self.request('/api/schedule')[0], 503)
+        self.assertEqual(self.request('/api/schedule', self.EVENT)[0], 503)
 
 
 class HttpTest(unittest.TestCase):
